@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function em() { return request.auth.token.email.lower(); }
+    function isAdmin() { return signedIn() && em() in ['tc@derrick.club']; }
+    function isTeam() { return signedIn() && (isAdmin() || exists(/databases/$(database)/documents/logins/$(em()))); }
+
+    // Who may sign in. Only the admin edits this list (TC Desk keeps it in step with Templates > Team).
+    match /logins/{email} {
+      allow read: if signedIn() && (isAdmin() || email == em());
+      allow write: if isAdmin();
+    }
+    // Each person's own saved filters and views.
+    match /data/users/{uid}/{docId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    // Everything else: deals, contacts, templates, chat, settings. Team only.
+    match /{col}/{docId} {
+      allow read, write: if col != 'logins' && isTeam();
+    }
+  }
+}
