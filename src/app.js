@@ -247,7 +247,7 @@ function listItems(){const k=S.kind,q=S.q.toLowerCase();
 function cardsHTML(){if(!S.loaded)return '<p class="mut">Loading…</p>';const arr=listItems();
  if(!arr.length)return `<div class="card mut" style="text-align:center;padding:30px">${ofKind().length?'Nothing matches these filters.':`No ${KLABEL[S.kind][1]}s yet. Click "New ${KLABEL[S.kind][1]}" to start one.`}</div>`;return arr.map(t=>card(t,true)).join('')}
 function phChips(){const k=S.kind;return phasesFor(k).concat([NOPH]).map(p=>`<button class="phchip ${S.phHide[k].includes(p.id)?'off':''}" style="background:${p.bg};color:${p.fg}" data-act="phf" data-v="${esc(p.id)}">${S.phHide[k].includes(p.id)?'':'✓ '}${esc(p.name)}</button>`).join('')}
-function filters(){const k=S.kind;const all=ofKind();const cnt=(fn)=>all.filter(fn).length;
+function filters(){const k=S.kind;const all=ofKind().filter(t=>!t.vault&&t.f.status!=='Archived');const cnt=(fn)=>all.filter(fn).length;
  const cb=(grp,v,l,on,n)=>`<label><input type="checkbox" data-flt="${grp}" value="${esc(v)}" ${on?'checked':''}>${esc(l)}${n!=null?` <b>${n}</b>`:''}</label>`;
  const ord=k==='listing'?[['entry','Entry date'],['live','Live date'],['exp','Expiration'],['addr','Address'],['agent','Agent']]:[['entry','Entry date'],['acc','Acceptance date'],['coe','Close date'],['addr','Address'],['agent','Agent']];
  return `<h4>Status</h4>${(k==='listing'?LS_STATUS:TX_STATUS).filter(s=>s!=='Archived').map(s=>cb('st',s,s,S.st[k].includes(s),cnt(t=>t.f.status===s))).join('')}`+
