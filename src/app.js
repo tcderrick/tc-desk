@@ -96,9 +96,9 @@ function syncPrefs(){clearTimeout(S._uT);S._uT=setTimeout(()=>{const o=uSnap();c
 document.addEventListener('change',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.attin){addAtt(t.dataset.attin,t.files);t.value='';return}if(t&&t.id==='emFrom'){prefs().from=t.value;saveLS();return}if(t&&t.id==='sigWho'){S.sigWho=t.value;render();return}if(t&&t.dataset&&t.dataset.cdd){const [tid,key]=t.dataset.cdd.split('|');const tt=getTx(tid);if(tt&&t.value){setDue(tt,key,t.value);touch(tt,1);toast('Moved to '+fmtS(t.value));refreshTasks()}return}if(t&&t.dataset&&t.dataset.memem){const m=S.members.find(x=>x.id===t.dataset.memem);if(m){m.email=t.value.trim().toLowerCase();t.value=m.email;save('members',m).then(()=>toast('Saved')).catch(dbErr)}}});
 setTimeout(()=>{S._uReady=true},8000);
 ['click','input','change','keydown','focusin'].forEach(ev=>document.addEventListener(ev,e=>{if(S.view!=='tasks')return;const c=e.target&&e.target.closest&&e.target.closest('[data-txctx]');if(c)S.txId=c.dataset.txctx},true));
-const navKey=()=>{const v=S.view;const o={v};if(v==='list')o.k=S.kind;else if(v==='detail'){o.tx=S.txId;o.tab=S.tab}else if(v==='tasks')o.tk=S.tk&&S.tk.kind;else if(v==='contacts')o.c=S.cTab;else if(v==='templates')o.t=S.tplKind;return o};
+const navKey=()=>{const v=S.view;const o={v};if(v==='list')o.k=S.kind;else if(v==='detail'){o.tx=S.txId;o.tab=S.tab}else if(v==='tasks')o.tk=S.tk&&S.tk.kind;else if(v==='contacts')o.c=S.cTab;else if(v==='templates')o.t=S.tplKind;else if(v==='chat')o.ct=S.chatTx||'';return o};
 function navSync(){if(S._popping)return;const o=navKey();const cur=history.state&&history.state.tcd;if(cur&&JSON.stringify(cur)===JSON.stringify(o))return;try{if(!cur)history.replaceState({tcd:o},'');else history.pushState({tcd:o},'')}catch(e){}}
-window.addEventListener('popstate',e=>{const o=e.state&&e.state.tcd;if(!o)return;S._popping=true;try{flushAll();closeEmPop&&closeEmPop();S.view=o.v;if(o.k)S.kind=o.k;if(o.v==='detail'){if(getTx(o.tx)){S.txId=o.tx;S.tab=o.tab||S.tab}else S.view='list'}if(o.tk&&S.tk)S.tk.kind=o.tk;if(o.c)S.cTab=o.c;if(o.t)S.tplKind=o.t;render();window.scrollTo(0,0)}finally{setTimeout(()=>{S._popping=false},0)}});
+window.addEventListener('popstate',e=>{const o=e.state&&e.state.tcd;if(!o)return;S._popping=true;try{flushAll();closeEmPop&&closeEmPop();S.view=o.v;if(o.k)S.kind=o.k;if(o.v==='detail'){if(getTx(o.tx)){S.txId=o.tx;S.tab=o.tab||S.tab}else S.view='list'}if(o.tk&&S.tk)S.tk.kind=o.tk;if(o.c)S.cTab=o.c;if(o.t)S.tplKind=o.t;if(o.v==='chat')S.chatTx=o.ct||null;render();window.scrollTo(0,0)}finally{setTimeout(()=>{S._popping=false},0)}});
 document.addEventListener('click',()=>setTimeout(navSync,0));
 document.addEventListener('click',e=>{const el=e.target;if(!el||!el.closest)return;if(el.id==='tkMod'){S._tkm=null;tkModalRefresh();return}
  if(el.closest('button,input,select,textarea,a,label,.tke,.empop'))return;
@@ -109,6 +109,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S._tkm){S._tkm=null
 document.addEventListener('dragover',e=>{const z=e.target.closest&&e.target.closest('.ematt');if(z&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){e.preventDefault();z.classList.add('dropon')}});
 document.addEventListener('dragleave',e=>{const z=e.target.closest&&e.target.closest('.ematt');if(z)z.classList.remove('dropon')});
 document.addEventListener('drop',e=>{const z=e.target.closest&&e.target.closest('.ematt');if(z&&e.dataTransfer&&e.dataTransfer.files.length){e.preventDefault();z.classList.remove('dropon');addAtt(z.dataset.attfor,e.dataTransfer.files)}});
+document.addEventListener('click',e=>{const r=$('#pcRes');if(r&&!(e.target.closest&&e.target.closest('.pclist .gosrch')))r.classList.add('hidden')});
+document.addEventListener('keydown',e=>{const t=e.target;if(!t)return;if(t.id==='pcIn'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();pcSend()}else if(t.id==='pcFind'&&e.key==='Enter'){const f=$('#pcRes .gor');if(f){e.preventDefault();f.click()}}});
+document.addEventListener('input',e=>{const t=e.target;if(!t||t.id!=='pcFind')return;const q=t.value.trim().toLowerCase();const box=$('#pcRes');if(!box)return;if(!q){box.classList.add('hidden');return}
+ const R=S.tx.filter(x=>(String(x.f.address||'')+' '+(x.f.city||'')+' '+titleOf(x)).toLowerCase().includes(q)).sort((a,b)=>(isOpen(b)?1:0)-(isOpen(a)?1:0)).slice(0,8);
+ box.innerHTML=R.length?R.map(x=>`<button class="gor" data-act="pc-go" data-id="${x.id}"><b>${esc(txLabel(x))}</b><span class="mut small"> ${esc(titleOf(x).split(' | ')[0]||'')}${isOpen(x)?'':' · '+esc(x.f.status||'')}</span></button>`).join(''):'<div class="mut small" style="padding:8px">No matches</div>';box.classList.remove('hidden')});
 let db=null,downloads=null;
 const dirty=new Set(),timers={},chains={};
 let lastFocus=null;
@@ -229,12 +234,12 @@ async function richCopy(t){try{if(window.ClipboardItem){const h=isHTML(t)?'<div 
 async function copy(text,label){try{await navigator.clipboard.writeText(text);toast((label||'Text')+' copied')}catch(e){toast('Copy was blocked. Select the text and copy it manually.')}}
 const editing=()=>{const a=document.activeElement;return a&&app.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)};
 
-function top(){const nv=(v,k,l)=>{const on=v==='list'?(S.view==='list'||S.view==='detail')&&S.kind===k:v==='tasks'?S.view==='tasks'&&S.tk.kind===k:v==='contacts'?S.view==='contacts'&&(S.cTab==='clients'?'clients':'assoc')===(k||'assoc'):S.view===v;return `<button data-act="nav" data-v="${v}" ${k?`data-k="${k}"`:''} class="${on?'on':''}">${l}</button>`};
- return `<header class="top"><div class="brand"><i></i>TC Desk</div><nav class="main">${nv('list','listing','Listings')}${nv('tasks','listing','Listing tasks')}${nv('list','transaction','Transactions')}${nv('tasks','transaction','Transaction tasks')}${nv('archive','','Archive')}${nv('contacts','assoc','Associates')}${nv('contacts','clients','Buyers & Sellers')}${nv('templates','','Templates')}</nav><div class="grow"></div><span id="saving" class="mut small"></span></header>`+
+function top(){const nv=(v,k,l)=>{const on=v==='list'?(S.view==='list'||S.view==='detail')&&S.kind===k:v==='tasks'?S.view==='tasks'&&S.tk.kind===k:v==='contacts'?S.view==='contacts'&&(S.cTab==='clients'?'clients':'assoc')===(k||'assoc'):S.view===v;return `<button data-act="nav" data-v="${v}" ${k?`data-k="${k}"`:''} class="${on?'on':''}" ${v==='chat'?'id="navChat"':''}>${l}${v==='chat'?chatBadge():''}</button>`};
+ return `<header class="top"><div class="brand"><i></i>TC Desk</div><nav class="main">${nv('list','listing','Listings')}${nv('tasks','listing','Listing tasks')}${nv('list','transaction','Transactions')}${nv('tasks','transaction','Transaction tasks')}${nv('chat','','Chat')}${nv('archive','','Archive')}${nv('contacts','assoc','Associates')}${nv('contacts','clients','Buyers & Sellers')}${nv('templates','','Templates')}</nav><div class="grow"></div><span id="saving" class="mut small"></span></header>`+
  (S.offline?'<div class="banner">Saving is off in this view. Open this page on claude.ai while signed in to keep your data.</div>':'')+
  (S.slow?'<div class="banner">Your data can\'t be reached yet. What you see may be out of date.</div>':'')+
  (S.err?`<div class="banner">Couldn't load your data (${esc(S.err)}). Reload the page to try again.</div>`:'')+impBanner()}
-let _rk='';function render(){const k=S.view+'|'+(S.view==='detail'?S.txId:'')+'|'+(S.view==='tasks'?S.tk.kind:S.kind),y=window.scrollY;if(S.view==='detail')renderDetail();else if(S.view==='templates')renderTemplates();else if(S.view==='contacts')renderContacts();else if(S.view==='tasks')renderTasks();else if(S.view==='archive')renderArchive();else renderList();if(k===_rk&&y)window.scrollTo(0,y);_rk=k;const nv=document.querySelector('nav.main'),on=nv&&nv.querySelector('.on');if(on&&nv.scrollWidth>nv.clientWidth)nv.scrollLeft=on.offsetLeft-nv.clientWidth/2+on.offsetWidth/2}
+let _rk='';function render(){const k=S.view+'|'+(S.view==='detail'?S.txId:'')+'|'+(S.view==='tasks'?S.tk.kind:S.kind),y=window.scrollY;if(S.view==='detail')renderDetail();else if(S.view==='templates')renderTemplates();else if(S.view==='contacts')renderContacts();else if(S.view==='tasks')renderTasks();else if(S.view==='archive')renderArchive();else if(S.view==='chat')renderChat();else renderList();if(k===_rk&&y)window.scrollTo(0,y);_rk=k;const nv=document.querySelector('nav.main'),on=nv&&nv.querySelector('.on');if(on&&nv.scrollWidth>nv.clientWidth)nv.scrollLeft=on.offsetLeft-nv.clientWidth/2+on.offsetWidth/2}
 
 /* ---------- cards & list ---------- */
 function ckStats(tx){const c=tx.checklist||[];const d=c.filter(i=>i.done).length,t=c.length;return {d,t,p:t?Math.round(d/t*100):0}}
@@ -497,6 +502,21 @@ const chatFor=id=>S.chat.filter(m=>m.txId===id).sort((a,b)=>(a.at||0)-(b.at||0))
 const seenAt=id=>((LS.chatSeen||{})[id])||0;
 function markSeen(id){LS.chatSeen=LS.chatSeen||{};LS.chatSeen[id]=Date.now();saveLS();syncPrefs()}
 const unread=id=>chatFor(id).filter(m=>m.at>seenAt(id)&&m.by!==me()).length;
+const totalUnread=()=>{const seen={};let n=0;S.chat.forEach(m=>{if(m.by!==me()&&m.at>seenAt(m.txId))n++});return n};
+const chatBadge=()=>{const n=totalUnread();return n?` <span class="nbadge">${n>99?'99+':n}</span>`:''};
+function refreshChatBadge(){const b=$('#navChat');if(b)b.innerHTML='Chat'+chatBadge()}
+const txLabel=t=>t?(t.f.address||'Untitled')+(t.f.city?', '+t.f.city:''):'Unknown property';
+function chatThreads(){const by=new Map();S.chat.forEach(m=>{const c=by.get(m.txId);if(!c||m.at>c.at)by.set(m.txId,m)});return [...by.entries()].map(([id,last])=>({id,last,t:S.tx.find(x=>x.id===id)})).sort((a,b)=>b.last.at-a.last.at)}
+function renderChat(){const th=chatThreads();if(!S.chatTx||(!th.some(x=>x.id===S.chatTx)&&!getTx(S.chatTx)))S.chatTx=th.length?th[0].id:null;
+ app.innerHTML=top()+`<div class="wrap wide"><div class="row between"><h1>Chat</h1></div><div class="pchat ${S.chatTx?'has':''}"><div class="card pclist"><div class="gosrch" style="position:relative"><input id="pcFind" placeholder="Start a chat for a property…" autocomplete="off"><div id="pcRes" class="gores hidden"></div></div><div id="pcThreads">${pcThreads()}</div></div><div class="card pcmain" id="pcMain">${pcMain()}</div></div></div>`;
+ const l=$('#pcMsgs');if(l)l.scrollTop=l.scrollHeight;if(S.chatTx)markSeen(S.chatTx);refreshChatBadge();const th2=$('#pcThreads');if(th2)th2.innerHTML=pcThreads()}
+function pcThreads(){const th=chatThreads();if(!th.length)return '<p class="mut small" style="padding:10px">No chats yet. Search above to start one for a property.</p>';
+ return th.map(x=>{const n=x.id===S.chatTx?0:unread(x.id);const d=new Date(x.last.at);const td=new Date();const when=d.toDateString()===td.toDateString()?d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  return `<button class="pct ${x.id===S.chatTx?'on':''} ${n?'unread':''}" data-act="pc-sel" data-id="${x.id}"><div class="row between" style="gap:8px"><b class="pca">${esc(txLabel(x.t))}</b><span class="mut small nw">${when}</span></div><div class="row between" style="gap:8px"><span class="mut small pcs">${esc((x.last.by||'')+': '+x.last.text)}</span>${n?`<span class="nbadge">${n}</span>`:''}</div></button>`}).join('')}
+function pcMain(){const t=S.chatTx&&getTx(S.chatTx);if(!S.chatTx)return '<p class="mut" style="margin:0">Pick a chat on the left, or search for a property to start one.</p>';
+ return `<div class="row between pchead"><div><button class="linkbtn pcback" data-act="pc-back">← Chats</button><b style="font-size:16px">${esc(txLabel(t))}</b>${t?`<div class="mut small">${esc(titleOf(t))}</div>`:''}</div>${t?`<button class="btn sm" data-act="pc-open" data-id="${t.id}">Open deal</button>`:''}</div><div class="clist pcmsgs" id="pcMsgs">${t?chatMsgs(t):chatMsgs({id:S.chatTx})}</div><div class="cin"><textarea id="pcIn" placeholder="Message the team about ${esc(t?t.f.address||'this property':'this property')}… (Enter to send)"></textarea><button class="btn pri sm" data-act="pc-send">Send</button></div>`}
+function pcRefresh(){if(S.view!=='chat')return;const th=$('#pcThreads');if(th)th.innerHTML=pcThreads();const l=$('#pcMsgs');if(l&&S.chatTx){const t=getTx(S.chatTx);l.innerHTML=chatMsgs(t||{id:S.chatTx});l.scrollTop=l.scrollHeight;markSeen(S.chatTx);if(th)th.innerHTML=pcThreads()}refreshChatBadge()}
+async function pcSend(){const ta=$('#pcIn');const v=ta&&ta.value.trim();if(!v||!S.chatTx)return;const m={id:uid(),txId:S.chatTx,by:me(),text:v,at:Date.now(),createdAt:Date.now()};ta.value='';S.chat.push(m);markSeen(S.chatTx);pcRefresh();ta.focus();try{await save('chat',m)}catch(e){dbErr(e)}}
 function chatMsgs(tx){const L=chatFor(tx.id);if(!L.length)return '<p class="mut small" style="margin:8px 0">No messages yet. Notes for the team about this property go here.</p>';let last='';
  return L.map(m=>{const d=new Date(m.at).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});const sep=d!==last?`<div class="cdate">${d}</div>`:'';last=d;const mine=m.by===me();
   return `${sep}<div class="cm ${mine?'mine':''}"><div class="cmeta"><b>${esc(m.by||'Someone')}</b> ${new Date(m.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}${mine?` <button class="cdel" data-act="chat-del" data-id="${m.id}" title="Delete">✕</button>`:''}</div><div class="ctext">${esc(m.text)}</div></div>`}).join('')}
@@ -979,6 +999,11 @@ app.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if
  switch(a){
  case 'q-clear':{S.q='';const qi=$('#q');if(qi){qi.value='';qi.focus()}b.classList.add('hidden');refreshList();break}
  case 'cd-open':{const k=b.dataset.id;S.tkOpen.has(k)?S.tkOpen.delete(k):S.tkOpen.add(k);refreshTasks();break}
+ case 'pc-sel':S.chatTx=b.dataset.id;renderChat();setTimeout(()=>{const i=$('#pcIn');if(i)i.focus()},0);break;
+ case 'pc-back':S.chatTx=null;renderChat();break;
+ case 'pc-send':pcSend();break;
+ case 'pc-open':{flushAll();S.txId=b.dataset.id;S.tab='summary';S.view='detail';render();window.scrollTo(0,0);break}
+ case 'pc-go':{S.chatTx=b.dataset.id;renderChat();setTimeout(()=>{const i=$('#pcIn');if(i)i.focus()},0);break}
  case 'tkm-close':S._tkm=null;tkModalRefresh();if(S.view==='tasks')refreshTasks();else if(tx&&S.view==='detail')refreshCk(tx);break;
  case 'nav':S._tkm=null;flushAll();if(b.dataset.v==='contacts'){S.cTab=b.dataset.k==='clients'?'clients':'assoc';S.crole='';S.cId=null;S.cDraft=null;S.view='contacts';render();window.scrollTo(0,0);break}if(b.dataset.v==='tasks'){S.tk.kind=b.dataset.k;tkSave();S.view='tasks';render();window.scrollTo(0,0);break}if(b.dataset.k&&b.dataset.k!==S.kind){S.kind=b.dataset.k}if(b.dataset.v==='list')S.q='';S.view=b.dataset.v;render();break;
  case 'phf':{const h=S.phHide[S.kind];const v=b.dataset.v;const i=h.indexOf(v);if(i<0)h.push(v);else h.splice(i,1);refreshList();break}
@@ -1211,7 +1236,7 @@ window.addEventListener('beforeunload',flushAll);
 
 /* ---------- data ---------- */
 function onData(kind){
- if(kind==='chat'){chatUpdate();return}
+ if(kind==='chat'){refreshChatBadge();if(S.view==='chat'){pcRefresh();return}chatUpdate();return}
  if(S.view==='tasks'){if(!editing()&&(kind==='tx'||kind==='members'||kind==='phases'))refreshTasks();return}
  if(S.view==='list'){refreshList()}
  else if(S.view==='detail'){if(!getTx()){S.view='list';return render()}
