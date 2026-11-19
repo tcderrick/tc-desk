@@ -1,7 +1,7 @@
 // TC Desk hosted shell: Firebase login + a small adapter so the TC Desk app runs unchanged.
 import { initializeApp } from 'firebase/app';
 import {
-  getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
+  getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, reauthenticateWithPopup, linkWithPopup,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
   setPersistence, browserLocalPersistence
 } from 'firebase/auth';
@@ -141,6 +141,56 @@ window.tcdRestore = () => {
     ov.querySelector('#rOk').onclick = () => location.reload();
   };
   inp.click();
+};
+
+/* ---------- Gmail: send from the signed-in person's own Gmail (or a Send-as alias) ---------- */
+const GSCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.settings.basic'];
+let gTok = null, gExp = 0;
+try { const c = JSON.parse(sessionStorage.getItem('tcdG') || 'null'); if (c && c.exp > Date.now() + 60000) { gTok = c.t; gExp = c.exp } } catch (e) {}
+async function gmailToken(force) {
+  if (!force && gTok && Date.now() < gExp - 60000) return gTok;
+  const u = auth.currentUser; const p = new GoogleAuthProvider(); GSCOPES.forEach(x => p.addScope(x));
+  p.setCustomParameters({ login_hint: u.email || '' });
+  const hasG = u.providerData.some(d => d.providerId === 'google.com');
+  const res = hasG ? await reauthenticateWithPopup(u, p) : await linkWithPopup(u, p);
+  const cred = GoogleAuthProvider.credentialFromResult(res);
+  if (!cred || !cred.accessToken) throw new Error('Gmail did not give permission');
+  gTok = cred.accessToken; gExp = Date.now() + 55 * 60 * 1000;
+  try { sessionStorage.setItem('tcdG', JSON.stringify({ t: gTok, exp: gExp })) } catch (e) {}
+  return gTok;
+}
+const utf8b64 = str => { const b = new TextEncoder().encode(str); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s) };
+const wrap76 = s => s.replace(/.{1,76}/g, m => m + '\r\n');
+const hdr = s => /[^\x20-\x7e]/.test(s) ? '=?UTF-8?B?' + utf8b64(s) + '?=' : s;
+const addrHdr = list => String(list || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean).map(a => {
+  const m = /^(.*)<([^>]+)>$/.exec(a); return m && m[1].trim() ? hdr(m[1].trim().replace(/^"|"$/g, '')) + ' <' + m[2].trim() + '>' : a }).join(', ');
+function buildMime({ from, to, cc, bcc, subject, html, text }) {
+  const imgs = []; let n = 0;
+  html = html.replace(/src=(["'])data:(image\/[a-z+.-]+);base64,([^"']+)\1/gi, (all, q, type, data) => { const id = 'img' + (++n) + '.' + Date.now().toString(36) + '@tcdesk'; imgs.push({ id, type, data }); return `src=${q}cid:${id}${q}` });
+  const R = 'rel_' + Date.now().toString(36), A = 'alt_' + Math.random().toString(36).slice(2);
+  const L = [];
+  if (from) L.push('From: ' + addrHdr(from));
+  L.push('To: ' + addrHdr(to)); if (cc) L.push('Cc: ' + addrHdr(cc)); if (bcc) L.push('Bcc: ' + addrHdr(bcc));
+  L.push('Subject: ' + hdr(subject || ''), 'MIME-Version: 1.0', `Content-Type: multipart/related; boundary="${R}"`, '', `--${R}`,
+    `Content-Type: multipart/alternative; boundary="${A}"`, '', `--${A}`, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', wrap76(utf8b64(text || '')),
+    `--${A}`, 'Content-Type: text/html; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', wrap76(utf8b64(html || '')), `--${A}--`);
+  imgs.forEach(im => L.push(`--${R}`, `Content-Type: ${im.type}`, 'Content-Transfer-Encoding: base64', `Content-ID: <${im.id}>`, 'Content-Disposition: inline', '', wrap76(im.data.replace(/\s+/g, ''))));
+  L.push(`--${R}--`, '');
+  return L.join('\r\n');
+}
+const b64url = s => utf8b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function gfetch(url, opt = {}) {
+  let tok = await gmailToken(false);
+  let r = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, opt.headers || {}) }));
+  if (r.status === 401) { gTok = null; sessionStorage.removeItem('tcdG'); const e = new Error('Gmail sign-in expired. Click Send again to reconnect.'); e.code = 'reauth'; throw e }
+  if (!r.ok) { let m = ''; try { m = (await r.json()).error.message } catch (e) {} const e = new Error(m || ('Gmail error ' + r.status)); e.code = 'gmail'; e.status = r.status; throw e }
+  return r.json();
+}
+window.tcdMail = {
+  connected: () => !!(gTok && Date.now() < gExp - 60000),
+  connect: () => gmailToken(true),
+  async sendAs() { const d = await gfetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'); return (d.sendAs || []).filter(x => x.verificationStatus !== 'pending').map(x => ({ email: x.sendAsEmail, name: x.displayName || '', primary: !!x.isPrimary, def: !!x.isDefault })) },
+  async send(m) { const raw = b64url(buildMime(m)); return gfetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', body: JSON.stringify({ raw }) }) }
 };
 
 /* ---------- start ---------- */
