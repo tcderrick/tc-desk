@@ -164,18 +164,25 @@ const wrap76 = s => s.replace(/.{1,76}/g, m => m + '\r\n');
 const hdr = s => /[^\x20-\x7e]/.test(s) ? '=?UTF-8?B?' + utf8b64(s) + '?=' : s;
 const addrHdr = list => String(list || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean).map(a => {
   const m = /^(.*)<([^>]+)>$/.exec(a); return m && m[1].trim() ? hdr(m[1].trim().replace(/^"|"$/g, '')) + ' <' + m[2].trim() + '>' : a }).join(', ');
-function buildMime({ from, to, cc, bcc, subject, html, text }) {
+function buildMime({ from, to, cc, bcc, subject, html, text, files }) {
   const imgs = []; let n = 0;
   html = html.replace(/src=(["'])data:(image\/[a-z+.-]+);base64,([^"']+)\1/gi, (all, q, type, data) => { const id = 'img' + (++n) + '.' + Date.now().toString(36) + '@tcdesk'; imgs.push({ id, type, data }); return `src=${q}cid:${id}${q}` });
-  const R = 'rel_' + Date.now().toString(36), A = 'alt_' + Math.random().toString(36).slice(2);
+  const R = 'rel_' + Date.now().toString(36), A = 'alt_' + Math.random().toString(36).slice(2), M = 'mix_' + Math.random().toString(36).slice(2);
+  const att = files || [];
   const L = [];
   if (from) L.push('From: ' + addrHdr(from));
   L.push('To: ' + addrHdr(to)); if (cc) L.push('Cc: ' + addrHdr(cc)); if (bcc) L.push('Bcc: ' + addrHdr(bcc));
-  L.push('Subject: ' + hdr(subject || ''), 'MIME-Version: 1.0', `Content-Type: multipart/related; boundary="${R}"`, '', `--${R}`,
+  L.push('Subject: ' + hdr(subject || ''), 'MIME-Version: 1.0');
+  if (att.length) L.push(`Content-Type: multipart/mixed; boundary="${M}"`, '', `--${M}`);
+  L.push(`Content-Type: multipart/related; boundary="${R}"`, '', `--${R}`,
     `Content-Type: multipart/alternative; boundary="${A}"`, '', `--${A}`, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', wrap76(utf8b64(text || '')),
     `--${A}`, 'Content-Type: text/html; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', wrap76(utf8b64(html || '')), `--${A}--`);
   imgs.forEach(im => L.push(`--${R}`, `Content-Type: ${im.type}`, 'Content-Transfer-Encoding: base64', `Content-ID: <${im.id}>`, 'Content-Disposition: inline', '', wrap76(im.data.replace(/\s+/g, ''))));
-  L.push(`--${R}--`, '');
+  L.push(`--${R}--`);
+  att.forEach(f => { const nm = String(f.name || 'file').replace(/["\r\n]/g, ''); const enc = /[^\x20-\x7e]/.test(nm) ? `filename*=UTF-8''${encodeURIComponent(nm)}` : `filename="${nm}"`;
+    L.push(`--${M}`, `Content-Type: ${f.type || 'application/octet-stream'}; name="${hdr(nm)}"`, 'Content-Transfer-Encoding: base64', `Content-Disposition: attachment; ${enc}`, '', wrap76(f.data)) });
+  if (att.length) L.push(`--${M}--`);
+  L.push('');
   return L.join('\r\n');
 }
 const b64url = s => utf8b64(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -190,7 +197,16 @@ window.tcdMail = {
   connected: () => !!(gTok && Date.now() < gExp - 60000),
   connect: () => gmailToken(true),
   async sendAs() { const d = await gfetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'); return (d.sendAs || []).filter(x => x.verificationStatus !== 'pending').map(x => ({ email: x.sendAsEmail, name: x.displayName || '', primary: !!x.isPrimary, def: !!x.isDefault })) },
-  async send(m) { const raw = b64url(buildMime(m)); return gfetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', body: JSON.stringify({ raw }) }) }
+  async send(m) {
+    await gmailToken(false); // ask for Gmail permission first, while the click still counts
+    const files = [];
+    for (const f of (m.files || [])) {
+      const b = new Uint8Array(await f.arrayBuffer()); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+      files.push({ name: f.name, type: f.type, data: btoa(s) });
+    }
+    const mime = buildMime(Object.assign({}, m, { files }));
+    return gfetch('https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media', { method: 'POST', body: mime, headers: { 'Content-Type': 'message/rfc822' } });
+  }
 };
 
 /* ---------- start ---------- */
