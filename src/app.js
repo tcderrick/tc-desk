@@ -35,7 +35,7 @@ const TX_SECTIONS=[
  {t:'Title',p:'title',f:[['title_officer','Title officer'],['title_company','Title company'],['title_phone','Phone'],['title_email','Email']]},
  {t:'Lender',p:'lender',f:[['lender_officer','Loan officer'],['lender_company','Lender'],['lender_phone','Phone'],['lender_email','Email'],['loan_number','Loan #']]},
  {t:'Contractual terms',custom:'terms',f:[]},
- {t:'Home warranty',f:[['hw_paid_by','Paid by','sel',['','Seller','Buyer','Split','Agent','Waived']],['hw_company','Provider'],['hw_plan','Plan'],['hw_amount','Cost','money'],['hw_ordered_by','Ordered by'],['hw_policy','Policy #']]},
+ {t:'Home warranty',f:[['hw_paid_by','Paid by','sel',['','Seller','Buyer','Split','Agent','Waived']],['hw_company','Provider'],['hw_amount','Cost','money']]},
  {t:'Documents & terms',f:[['counters','Counter offers','area',['SCO','BCO']],['addenda','Addendums','area',['Addendum']],['eta','Extensions (ETA)','area',['ETA']],['crs','Contingency removals','area',['CR']]]},
  {t:'Deal info',f:[['side','Representation','sel',['Buyer','Seller','Dual']],['owner','Owned by','member'],['mls','MLS #'],['esc_number','Escrow #'],['short_sale','Short sale?','sel',['','No','Yes']],['doc_email','Compliance email'],['oth_doc_email',"Other side's compliance email"]]}
 ];
@@ -731,7 +731,7 @@ function lookMatches(p,q){const role=PARTY[p].role;q=q.trim().toLowerCase();if(q
  const sc=c=>{const hay=[c.name,c.company,c.email,c.phone].join(' ').toLowerCase();if(!toks.every(t=>hay.includes(t)))return -1;let s=0;if(c.role===role)s+=10;if(c.name.toLowerCase().startsWith(q))s+=5;s+=usedIn(c.id)/10;return s};
  return pool.map(c=>[sc(c),c]).filter(x=>x[0]>=0).sort((a,b)=>b[0]-a[0]).slice(0,8).map(x=>x[1])}
 function showLook(inp){const p=inp.dataset.p;hideLook();const res=lookMatches(p,inp.value);if(!res.length)return;const box=document.createElement('div');box.id='plook';box.className='plook';
- box.innerHTML=res.map((c,n)=>`<div class="pli ${n===0?'on':''}" data-cid="${c.id}"><b>${esc(c.name)}</b> <span class="mut small">${esc(c.role)}</span><div class="mut small">${esc([c.company,c.email,c.phone].filter(Boolean).join(' · '))}</div></div>`).join('');
+ box.innerHTML=res.map((c,n)=>{const cl=CLIENT_ROLES.includes(c.role);const wf=cl&&/On file with: ([^\n]+)/.exec(c.notes||'');return `<div class="pli ${n===0?'on':''} ${cl?'cli':''}" data-cid="${c.id}"><div><b>${esc(c.name)}</b> <span class="mut small">${cl?'Client':esc(c.role)}</span></div><div class="mut small">${esc((cl?[c.email,c.phone]:[c.company,c.email,c.phone]).filter(Boolean).join(' · '))}</div>${cl&&(c.address||wf)?`<div class="mut small">${esc([c.address,wf?'with '+wf[1]:''].filter(Boolean).join(' · '))}</div>`:''}</div>`}).join('');
  inp.parentElement.style.position='relative';inp.parentElement.appendChild(box);box.dataset.p=p;box.dataset.for=inp.dataset.f;
  box.addEventListener('mousedown',e=>{const it=e.target.closest('.pli');if(!it)return;e.preventDefault();pickLook(inp,it.dataset.cid)})}
 function hideLook(){const b=$('#plook');if(b)b.remove()}
@@ -880,10 +880,13 @@ function partyModal(tx,p){const c=contactOf(tx,p);if(c)return contactModal(c,{ro
  $('#pmSave').onclick=()=>{flds.forEach(k=>{tx.f[P[k]]=$('#pm_'+k).value.trim()});touch(tx,1);syncContact(tx,p);m.classList.add('hidden');renderTab()};
  if($('#pmRm'))$('#pmRm').onclick=()=>{clearParty(tx,p);m.classList.add('hidden');renderTab()}}
 /* generic people search box */
-function showPS(inp){hideLook();const p=inp.dataset.ps;const res=p.startsWith('X:')?xMatches(inp.value):lookMatches(p,inp.value);if(!res.length)return;const box=document.createElement('div');box.id='plook';box.className='plook';box.dataset.for='ps-'+p;
- box.innerHTML=res.map((c,n)=>`<div class="pli ${n===0?'on':''}" data-cid="${c.id}"><b>${esc(c.name)}</b> <span class="mut small">${esc(c.role)}</span><div class="mut small">${esc([c.company,c.email,c.phone].filter(Boolean).join(' · '))}</div></div>`).join('');
+function showPS(inp){hideLook();const p=inp.dataset.ps;const res=p.startsWith('X:')?xMatches(inp.value,p.slice(2)):lookMatches(p,inp.value);if(!res.length)return;const box=document.createElement('div');box.id='plook';box.className='plook';box.dataset.for='ps-'+p;
+ box.innerHTML=res.map((c,n)=>{const cl=CLIENT_ROLES.includes(c.role);const wf=cl&&/On file with: ([^\n]+)/.exec(c.notes||'');return `<div class="pli ${n===0?'on':''} ${cl?'cli':''}" data-cid="${c.id}"><div><b>${esc(c.name)}</b> <span class="mut small">${cl?'Client':esc(c.role)}</span></div><div class="mut small">${esc((cl?[c.email,c.phone]:[c.company,c.email,c.phone]).filter(Boolean).join(' · '))}</div>${cl&&(c.address||wf)?`<div class="mut small">${esc([c.address,wf?'with '+wf[1]:''].filter(Boolean).join(' · '))}</div>`:''}</div>`}).join('');
  inp.parentElement.style.position='relative';inp.parentElement.appendChild(box);box.addEventListener('mousedown',e=>{const it=e.target.closest('.pli');if(!it)return;e.preventDefault();pickPS(inp,it.dataset.cid)})}
-function xMatches(q){q=q.trim().toLowerCase();if(!q)return [];const t=q.split(/\s+/);return S.contacts.filter(c=>{const h=[c.name,c.company,c.email,c.phone].join(' ').toLowerCase();return t.every(x=>h.includes(x))}).slice(0,8)}
+function xMatches(q,role){q=q.trim().toLowerCase();if(!q)return [];const t=q.split(/\s+/);const wantCl=CLIENT_ROLES.includes(role);
+ const L=S.contacts.filter(c=>{const h=[c.name,c.company,c.email,c.phone,c.address].join(' ').toLowerCase();return t.every(x=>h.includes(x))});
+ const sc=c=>{const cl=CLIENT_ROLES.includes(c.role);const nm=String(c.name||'').toLowerCase();return (wantCl===cl?0:2)+(nm.startsWith(q)||nm.split(/\s+/).some(w=>w.startsWith(t[0]))?0:1)};
+ return L.sort((a,b)=>sc(a)-sc(b)||String(a.name).localeCompare(String(b.name))).slice(0,12)}
 function pickPS(inp,cid){const tx=getTx();const c=S.contacts.find(x=>x.id===cid);hideLook();if(!tx||!c)return;const p=inp.dataset.ps;
  if(p.startsWith('X:')){tx.extra=tx.extra||[];tx.extra.push({id:uid(),role:p.slice(2),cid:c.id});touch(tx,1);if(inp.dataset.modal)$('#modal').classList.add('hidden');renderTab();toast(c.name+' added');return}
  assignContact(tx,p,c);if(inp.dataset.modal){$('#modal').classList.add('hidden')}renderTab();toast(c.name+' added as '+plabel(tx,p))}
@@ -905,7 +908,9 @@ function summaryHTML(tx,opt={}){if(kindOf(tx)==='listing')return listingSummary(
  const ag=(p,co)=>{const P=PARTY[p],C=PARTY[co];if(!f[P.name]&&!f[C.name])return '';const x=ci(p),y=ci(co);const ck=q=>pr?'':`class="clk" data-act="sum-edit" data-p="${q}"`;
   return half(p,`${esc(plabel(tx,p).toUpperCase())}: <b>${esc(f[P.name]||'')}</b>`,`<div class="pl"><div ${ck(p)}>${f[P.company]?`<div>${esc(f[P.company])}</div>`:''}${addr1L(x)}${lic(f[P.dre],x.odre)}${ln('Direct',f[P.phone])}${ln('Email',f[P.email])}</div>
   ${f[C.name]?`<div ${ck(co)}>${ln('Co-Agent',f[C.name])}${lic(f[C.dre],y.odre)}${ln('Co-Agent Direct',f[C.phone])}${ln('Co-Agent Email',f[C.email])}</div>`:''}</div>`,p,'')};
- const cli=(key,lbl,nk,ek,pk)=>f[nk]?half(key,`${lbl}`,`<div class="txt b ${pr?'':'clk'}" ${pr?'':`data-act="sum-edit" data-p="${key}"`}>${String(f[nk]).split(/\s+&\s+/).map(esc).join('<br>')}${f[ek]||f[pk]?`<div class="mut2">${esc([f[ek],f[pk]].filter(Boolean).join(' · '))}</div>`:''}</div>`,key,`<div class="txt b">${String(f[nk]).split(/\s+&\s+/).map(esc).join('<br>')}</div>`):'';
+ const plines=(nk,ek,pk)=>{const sp=v=>String(v||'').split(/[,;]\s*/).map(x=>x.trim()).filter(Boolean);const N=String(f[nk]||'').split(/\s+&\s+/).map(x=>x.trim()).filter(Boolean),E=sp(f[ek]),P=sp(f[pk]);
+  return N.map((n,i)=>{const last=i===N.length-1;const e=last?E.slice(i).join(', '):(E[i]||'');const ph=last?P.slice(i).join(', '):(P[i]||'');return `<div class="cline"><b>${esc(n)}</b>${e?` <span class="csep">|</span> ${esc(e)}`:''}${ph?` <span class="csep">|</span> ${esc(ph)}`:''}</div>`}).join('')};
+ const cli=(key,lbl,nk,ek,pk)=>f[nk]?sec(key,lbl,`<div class="txt ${pr?'':'clk'}" ${pr?'':`data-act="sum-edit" data-p="${key}"`}>${plines(nk,ek,pk)}</div>`,key,`<div class="txt b">${String(f[nk]).split(/\s+&\s+/).map(esc).join('<br>')}</div>`):'';
  const sellerLeft=f.side!=='Buyer';
  const pair=(l,r)=>l||r?`<div class="ss pair">${l||'<div></div>'}${r||'<div></div>'}</div>`:'';
  const tri=(p,c1,c2,c3)=>`<div class="tri ${pr?'':'clk'}" ${pr?'':`data-act="sum-edit" data-p="${p}"`}><div>${c1}</div><div>${c2}</div><div>${c3}</div></div>`;
@@ -924,8 +929,8 @@ function summaryHTML(tx,opt={}){if(kindOf(tx)==='listing')return listingSummary(
  const sc=sumCol(tx);return `<div class="sum ${pr?'print':''}" style="--sbg:${esc(sc.bg)};--sfg:${esc(sc.fg)}"><div class="sh"><div><h1>Transaction Summary</h1>${(m.seller_last||m.buyer_last)?`<div class="it">${esc(m.seller_last||'?')} to ${esc(m.buyer_last||'?')}</div>`:''}<div class="addr">${esc(m.full_address||'')}${f.city?', '+esc(f.state||'CA'):''}${f.zip?' '+esc(f.zip):''}</div>${f.mls?`<div class="mls">MLS #${esc(f.mls)}</div>`:''}</div><div class="shr">${sumLogos(tx)}</div></div>
  ${sec('contract','Contract information',contract.length?`<div class="two">${contract.join('')}</div>`:'')}
  ${sec('dates','Critical dates / milestones',dates)}
- ${sec('hw','Home warranty',f.hw_paid_by==='Waived'?'<div class="txt b">Buyer waives home warranty plan</div>':(()=>{const L=[['Paid By',f.hw_paid_by],['Total Cost',m.hw_amount],['Provider',f.hw_company],['Plan',f.hw_plan]].filter(x=>x[1]);return L.length?`<div class="hwl" style="padding:6px 10px;line-height:1.55">${L.map(([k,v])=>`<div><b>${k}:</b>&nbsp; ${esc(v)}</div>`).join('')}</div>`:''})())}
- ${sellerLeft?pair(cli('seller','SELLERS','sellers','seller_email','seller_phone'),cli('buyer','BUYER','buyers','buyer_email','buyer_phone')):pair(cli('buyer','BUYER','buyers','buyer_email','buyer_phone'),cli('seller','SELLERS','sellers','seller_email','seller_phone'))}
+ ${sec('hw','Home warranty',f.hw_paid_by==='Waived'?'<div class="txt b">Buyer waives home warranty plan</div>':(()=>{const L=[['Paid By',f.hw_paid_by],['Total Cost',m.hw_amount],['Provider',f.hw_company]].filter(x=>x[1]);return L.length?`<div class="hwl" style="padding:6px 10px;line-height:1.55">${L.map(([k,v])=>`<div><b>${k}:</b>&nbsp; ${esc(v)}</div>`).join('')}</div>`:''})())}
+ ${sellerLeft?cli('seller','SELLERS','sellers','seller_email','seller_phone')+cli('buyer','BUYER','buyers','buyer_email','buyer_phone'):cli('buyer','BUYER','buyers','buyer_email','buyer_phone')+cli('seller','SELLERS','sellers','seller_email','seller_phone')}
  ${sellerLeft?pair(ag('la','lca'),ag('ba','bca')):pair(ag('ba','bca'),ag('la','lca'))}
  ${sec('tc','Transaction coordinator',tcs.join(''))}
  ${sec('escrow','Escrow',ofc('esc',f.esc_number?`<div><b>Escrow #:</b> ${esc(f.esc_number)}</div>`:''),'esc')}
