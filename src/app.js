@@ -368,11 +368,11 @@ function linkCell(tx,c){if(c.k==='coe')return '';const L=cLinked(tx,c);return c.
 function cdStatus(c){return c.na?'na':c.waived?'waived':c.removed?'done':'open'}
 function cdRule(c){return c.from==='coe'?'coe':c.biz?'accb':'acc'}
 function cdDeadCell(tx,c){const dl=cDead(tx,c);const ext=c.date&&dl&&c.date!==dl;const st=cdStatus(c);const rl=!ext&&rolled(tx,c)?` <span class="mut small" title="Lands on ${fmtS(cdateRaw(tx,c))}, moved to the next business day">(weekend/holiday)</span>`:'';
- const main=dl?(ext?`<b>${fmtS(c.date)}</b> <span class="mut small">extended</span><div class="mut small">Contract: ${fmtS(dl)}</div>`:`<b>${fmtS(dl)}</b>${rl}`):'<span class="mut">Set acceptance</span>';
+ const main=dl?(ext?`<b>${fmtS(c.date)}</b> <span class="mut small">extended</span><div class="mut small">Contract: ${fmtS(dl)}</div>`:`<b>${fmtS(dl)}</b>${rl}`):`<span class="mut">${tx.f.acceptance||day0(tx)?'No days set':'Set acceptance'}</span>`;
  const pill=st==='done'?'<span class="pill ok">Done</span>':st==='waived'?'<span class="pill">Waived</span>':st==='na'?'<span class="pill">N/A</span>':(()=>{const w=cwatch(tx,c);return w?due(daysTo(w)):''})();
  return `${main}<div class="cdst">${pill}${st==='open'&&c.fu?' <span class="mut small">following up</span>':''}</div>`}
 function datesTab(tx){const rows=tx.cont.filter(c=>c.k!=='coe');return `<div class="card cdcard">${tx.f.acceptance?'':'<p class="warn" style="margin-top:0">Enter the acceptance date on the Attributes tab to calculate these deadlines.</p>'}
- <div class="cdwrap"><table class="list cdt2"><colgroup><col style="width:24%"><col style="width:19%"><col style="width:14%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:5%"><col style="width:2%"></colgroup>
+ <div class="cdwrap"><table class="list cdt2"><colgroup><col style="width:21%"><col style="width:19%"><col style="width:15%"><col style="width:12.5%"><col style="width:12.5%"><col style="width:10%"><col style="width:6.5%"><col style="width:3.5%"></colgroup>
  <thead><tr><th>Milestone</th><th>Counted as</th><th>Deadline</th><th title="A signed extension or a new ETA. Changes the deadline used in emails and the summary.">Extended to / ETA</th><th title="Doesn't change the deadline. Moves the reminder and the overdue alert while you wait.">Follow up on</th><th>Status</th><th>Linked</th><th></th></tr></thead><tbody>
  ${rows.map(c=>{const st=cdStatus(c);return `<tr id="cr-${c.id}" class="cdr ${st!=='open'?'cdoff':''}">
   <td><input class="cdlbl" data-c="${c.id}" data-cf="label" value="${esc(c.label)}"><div class="cdcode">{{<input data-c="${c.id}" data-cf="k" value="${esc(c.k||'')}" placeholder="${esc(slug(c.label))}" title="Email code">_date}}</div></td>
