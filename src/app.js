@@ -106,9 +106,15 @@ document.addEventListener('change',e=>{const t=e.target;if(t&&t.dataset&&t.datas
 setTimeout(()=>{S._uReady=true},8000);
 ['click','input','change','keydown','focusin'].forEach(ev=>document.addEventListener(ev,e=>{if(S.view==='detail'&&!(e.target&&e.target.closest&&e.target.closest('#tkMod')))return;const c=e.target&&e.target.closest&&e.target.closest('[data-txctx]');if(c)S.txId=c.dataset.txctx},true));
 const navKey=()=>{const v=S.view;const o={v};if(v==='list')o.k=S.kind;else if(v==='detail'){o.tx=S.txId;o.tab=S.tab}else if(v==='tasks')o.tk=S.tk&&S.tk.kind;else if(v==='contacts')o.c=S.cTab;else if(v==='templates')o.t=S.tplKind;else if(v==='chat')o.ct=S.chatTx||'';return o};
-function navSync(){if(S._popping)return;const o=navKey();const cur=history.state&&history.state.tcd;if(cur&&JSON.stringify(cur)===JSON.stringify(o))return;try{if(!cur)history.replaceState({tcd:o},'');else history.pushState({tcd:o},'')}catch(e){}}
-window.addEventListener('popstate',e=>{const o=e.state&&e.state.tcd;if(!o)return;S._popping=true;try{flushAll();closeEmPop&&closeEmPop();S.view=o.v;if(o.k)S.kind=o.k;if(o.v==='detail'){if(getTx(o.tx)){S.txId=o.tx;S.tab=o.tab||S.tab}else S.view='list'}if(o.tk&&S.tk)S.tk.kind=o.tk;if(o.c)S.cTab=o.c;if(o.t)S.tplKind=o.t;if(o.v==='chat')S.chatTx=o.ct||null;render();window.scrollTo(0,0)}finally{setTimeout(()=>{S._popping=false},0)}});
-document.addEventListener('click',()=>setTimeout(navSync,0));
+const navHash=o=>'#'+Object.entries(o).filter(([k,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+function navRead(){let h='';try{h=location.hash.slice(1)}catch(e){}if(!h){try{h=(sessionStorage.getItem('tcdNav')||'').slice(1)}catch(e){}}if(!h)return null;const o={};h.split('&').forEach(p=>{const i=p.indexOf('=');if(i>0)o[p.slice(0,i)]=decodeURIComponent(p.slice(i+1))});return o.v?o:null}
+function navSync(){if(S._popping||S._navInit)return;const o=navKey();const hs=navHash(o);try{sessionStorage.setItem('tcdNav',hs)}catch(e){}const cur=history.state&&history.state.tcd;if(cur&&JSON.stringify(cur)===JSON.stringify(o))return;let u;try{u=location.pathname+location.search+hs}catch(e){}try{if(!cur)history.replaceState({tcd:o},'',u);else history.pushState({tcd:o},'',u)}catch(e){try{if(!cur)history.replaceState({tcd:o},'');else history.pushState({tcd:o},'')}catch(e2){}}}
+function applyNav(o){S.view=o.v;if(o.k)S.kind=o.k;if(o.v==='detail'){if(getTx(o.tx)){S.txId=o.tx;S.tab=o.tab||S.tab}else S.view='list'}if(o.tk&&S.tk)S.tk.kind=o.tk;if(o.c)S.cTab=o.c;if(o.t)S.tplKind=o.t;if(o.v==='chat')S.chatTx=o.ct||null}
+window.addEventListener('popstate',e=>{const o=e.state&&e.state.tcd;if(!o)return;S._popping=true;try{flushAll();closeEmPop&&closeEmPop();applyNav(o);render();window.scrollTo(0,0)}finally{setTimeout(()=>{S._popping=false},0)}});
+/* restore the page after a refresh */
+S._navInit=navRead();if(S._navInit&&S._navInit.v!=='detail'){applyNav(S._navInit);S._navInit=null}
+async function navRestore(){const o=S._navInit;if(!o)return;if(!getTx(o.tx)&&db){try{await loadArchive()}catch(e){}}S._navInit=null;if(getTx(o.tx)&&S.view!=='detail'){applyNav(o);render();window.scrollTo(0,0)}navSync()}
+document.addEventListener('click',e=>{if(S._navInit&&e.isTrusted&&e.target.closest('nav,[data-act],.tcard,a,button'))S._navInit=null;setTimeout(navSync,0)});
 document.addEventListener('click',e=>{const el=e.target;if(!el||!el.closest)return;if(el.id==='tkMod'){S._tkm=null;tkModalRefresh();return}
  if(el.closest('button,input,select,textarea,a,label,.tke,.empop'))return;
  const row=el.closest('.tkpw[data-txctx] > .tkp');if(row){const b=row.querySelector('.tkbtn');if(b)b.click();return}
@@ -1344,9 +1350,10 @@ async function init(){render();const c=window.claude;
    if(kind==='tx'){arr=arr.map(o=>{normTx(o);o._col=COLS.tx;if(dirty.has(o.id)){const loc=S.tx.find(x=>x.id===o.id);if(loc&&loc._col!==ARCOL)return loc}return o});const ids=new Set(arr.map(o=>o.id));S.tx.forEach(l=>{if(ids.has(l.id))return;if(l._col===ARCOL||(dirty.has(l.id)&&l._col!==COLS.tx))arr.push(l)});if(S.loaded)setTimeout(migrateArchive,1500)}
    else if(kind==='members')arr.sort((a,b)=>a.name.localeCompare(b.name));
    else arr.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+   if(kind==='tx'&&S._navInit&&S._navInit.v==='detail')setTimeout(()=>{const o=S._navInit;if(o&&getTx(o.tx)){S._navInit=null;if(S.view!=='detail'){applyNav(o);render()}navSync()}},0);
    if(kind==='settings'){S.settings=arr;if(applyShared()&&S.view==='list'&&S.loaded&&!editing())setTimeout(refreshList,0)}
    let ev=kind;if(kind==='tdq'){S.tdq=arr}else if(kind==='books'){BOOKS=arr;mergeContacts();ev='contacts'}else if(kind==='contacts'){INDIV=arr;mergeContacts()}else S[kind]=arr;
-   if(!snap.metadata.fromCache&&!got[kind]){got[kind]=1;if(Object.keys(got).length===Object.keys(COLS).length){const was=S.slow;S.loaded=true;S.slow=false;clearTimeout(timer);if(was&&!S.importing)return render()}}
+   if(!snap.metadata.fromCache&&!got[kind]){got[kind]=1;if(Object.keys(got).length===Object.keys(COLS).length){const was=S.slow;S.loaded=true;setTimeout(navRestore,0);S.slow=false;clearTimeout(timer);if(was&&!S.importing)return render()}}
    if(kind==='tdq'){setTimeout(runTdq,600);return}
    if(kind==='email'&&S.loaded)setTimeout(seedFolders,800);
    if(S.importing)return;
