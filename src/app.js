@@ -271,7 +271,7 @@ function top(){const nv=(v,k,l)=>{const on=v==='list'?(S.view==='list'||S.view==
  (S.offline?'<div class="banner">Saving is off in this view. Open this page on claude.ai while signed in to keep your data.</div>':'')+
  (S.slow?'<div class="banner">Your data can\'t be reached yet. What you see may be out of date.</div>':'')+
  (S.err?`<div class="banner">Couldn't load your data (${esc(S.err)}). Reload the page to try again.</div>`:'')+impBanner()+`<div id="outBan">${outBanHTML()}</div>`}
-let _rk='';function render(){const k=S.view+'|'+(S.view==='detail'?S.txId:'')+'|'+(S.view==='tasks'?S.tk.kind:S.kind),y=window.scrollY;if(S.view==='detail')renderDetail();else if(S.view==='templates')renderTemplates();else if(S.view==='contacts')renderContacts();else if(S.view==='tasks')renderTasks();else if(S.view==='archive')renderArchive();else if(S.view==='chat')renderChat();else if(S.view==='outbox')renderOutbox();else renderList();if(k===_rk&&y)window.scrollTo(0,y);_rk=k;const nv=document.querySelector('nav.main'),on=nv&&nv.querySelector('.on');if(on&&nv.scrollWidth>nv.clientWidth)nv.scrollLeft=on.offsetLeft-nv.clientWidth/2+on.offsetWidth/2}
+let _rk='',_rv='';function render(){if(_rv==='tasks'&&S.view!=='tasks'&&S.tk&&S.tk.q){S.tk.q='';try{tkSave()}catch(e){}}_rv=S.view;const k=S.view+'|'+(S.view==='detail'?S.txId:'')+'|'+(S.view==='tasks'?S.tk.kind:S.kind),y=window.scrollY;if(S.view==='detail')renderDetail();else if(S.view==='templates')renderTemplates();else if(S.view==='contacts')renderContacts();else if(S.view==='tasks')renderTasks();else if(S.view==='archive')renderArchive();else if(S.view==='chat')renderChat();else if(S.view==='outbox')renderOutbox();else renderList();if(k===_rk&&y)window.scrollTo(0,y);_rk=k;const nv=document.querySelector('nav.main'),on=nv&&nv.querySelector('.on');if(on&&nv.scrollWidth>nv.clientWidth)nv.scrollLeft=on.offsetLeft-nv.clientWidth/2+on.offsetWidth/2}
 
 /* ---------- cards & list ---------- */
 function ckStats(tx){const c=tx.checklist||[];const d=c.filter(i=>i.done).length,t=c.length;return {d,t,p:t?Math.round(d/t*100):0}}
@@ -1572,6 +1572,17 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   if(close){const re=r.cloneRange();re.collapse(false);re.insertNode(document.createTextNode(close))}const t1=document.createTextNode(kind==='else'?open:open+'}}');const rs=r.cloneRange();rs.collapse(true);rs.insertNode(t1);
   const c=document.createRange();if(kind==='else')c.setStart(t1,t1.length);else c.setStart(t1,open.length);c.collapse(true);sl.removeAllRanges();sl.addRange(c);el.dispatchEvent(new InputEvent('input',{bubbles:true}));setTimeout(()=>el.dispatchEvent(new InputEvent('input',{bubbles:true})),60);return}
  const s0=el.selectionStart??el.value.length,e0=el.selectionEnd??s0;const v=el.value;const mid=v.slice(s0,e0);const ins=kind==='else'?open:open+'}}';el.value=v.slice(0,s0)+ins+mid+close+v.slice(e0);const cp=s0+(kind==='else'?open.length:open.length);el.focus();el.selectionStart=el.selectionEnd=cp;el.dispatchEvent(new Event('input',{bubbles:true}));setTimeout(()=>el.dispatchEvent(new Event('input',{bubbles:true})),60)});
+
+/* a clear (✕) button on every search box */
+(()=>{const SEL='input[placeholder^="Search"],input[placeholder^="Go to"],input[placeholder^="Type a name"],input[type=search]';
+ function fix(inp){if(inp._sx||inp.closest('.qwrap'))return;const par=inp.parentElement;if(!par)return;inp._sx=1;const b=document.createElement('button');b.type='button';b.className='sx hidden';b.textContent='✕';b.title='Clear search';b.tabIndex=-1;
+  if(getComputedStyle(par).position==='static')par.style.position='relative';par.insertBefore(b,inp.nextSibling);
+  const place=()=>{if(!inp.offsetWidth){b.classList.add('hidden');return}b.style.left=(inp.offsetLeft+inp.offsetWidth-28)+'px';b.style.top=(inp.offsetTop+(inp.offsetHeight-22)/2)+'px';b.classList.toggle('hidden',!inp.value)};
+  inp.style.paddingRight='32px';inp._sxPlace=place;place();inp.addEventListener('input',place);inp.addEventListener('focus',place);inp.addEventListener('keyup',place);
+  inp.addEventListener('keydown',e=>{if(e.key==='Escape'&&inp.value){e.preventDefault();b.click()}});
+  b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();inp.value='';inp.dispatchEvent(new Event('input',{bubbles:true}));inp.dispatchEvent(new Event('change',{bubbles:true}));inp.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,key:'Backspace'}));place();if(document.body.contains(inp))inp.focus()})}
+ const scan=()=>{document.querySelectorAll(SEL).forEach(fix);document.querySelectorAll('input').forEach(i=>{if(i._sxPlace)i._sxPlace()})};
+ new MutationObserver(()=>{clearTimeout(scan._t);scan._t=setTimeout(scan,40)}).observe(document.body,{childList:true,subtree:true});window.addEventListener('resize',()=>{clearTimeout(scan._t);scan._t=setTimeout(scan,80)});setTimeout(scan,0)})();
 /* ===== {{ autocomplete ===== */
 (()=>{let st=null;const box=document.createElement('div');box.id='acBox';box.className='acbox hidden';document.body.appendChild(box);
  const hide=()=>{box.classList.add('hidden');st=null};
