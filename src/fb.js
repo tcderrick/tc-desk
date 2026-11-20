@@ -153,18 +153,19 @@ window.tcdRestore = () => {
 
 /* ---------- Gmail: send from the signed-in person's own Gmail (or a Send-as alias) ---------- */
 const GSCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.settings.basic'];
-let gTok = null, gExp = 0;
-try { const c = JSON.parse(sessionStorage.getItem('tcdG') || 'null'); if (c && c.exp > Date.now() + 60000) { gTok = c.t; gExp = c.exp } } catch (e) {}
+const GREAD = 'https://www.googleapis.com/auth/gmail.readonly';
+let gTok = null, gExp = 0, gRead = false, wantRead = false;
+try { const c = JSON.parse(sessionStorage.getItem('tcdG') || 'null'); if (c && c.exp > Date.now() + 60000) { gTok = c.t; gExp = c.exp; gRead = !!c.r } } catch (e) {}
 async function gmailToken(force) {
-  if (!force && gTok && Date.now() < gExp - 60000) return gTok;
-  const u = auth.currentUser; const p = new GoogleAuthProvider(); GSCOPES.forEach(x => p.addScope(x));
+  if (!force && gTok && Date.now() < gExp - 60000 && (!wantRead || gRead)) return gTok;
+  const u = auth.currentUser; const p = new GoogleAuthProvider(); GSCOPES.forEach(x => p.addScope(x)); if (wantRead) p.addScope(GREAD);
   p.setCustomParameters({ login_hint: u.email || '' });
   const hasG = u.providerData.some(d => d.providerId === 'google.com');
   const res = hasG ? await reauthenticateWithPopup(u, p) : await linkWithPopup(u, p);
   const cred = GoogleAuthProvider.credentialFromResult(res);
   if (!cred || !cred.accessToken) throw new Error('Gmail did not give permission');
-  gTok = cred.accessToken; gExp = Date.now() + 55 * 60 * 1000;
-  try { sessionStorage.setItem('tcdG', JSON.stringify({ t: gTok, exp: gExp })) } catch (e) {}
+  gTok = cred.accessToken; gExp = Date.now() + 55 * 60 * 1000; gRead = wantRead;
+  try { sessionStorage.setItem('tcdG', JSON.stringify({ t: gTok, exp: gExp, r: gRead })) } catch (e) {}
   return gTok;
 }
 const utf8b64 = str => { const b = new TextEncoder().encode(str); let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s) };
@@ -204,6 +205,11 @@ async function gfetch(url, opt = {}) {
 window.tcdMail = {
   connected: () => !!(gTok && Date.now() < gExp - 60000),
   connect: () => gmailToken(true),
+  // Reading mail (for each deal's file email). Only asked of the person whose mailbox receives it.
+  wantRead() { wantRead = true },
+  readReady: () => !!(gTok && gRead && Date.now() < gExp - 60000),
+  connectRead() { wantRead = true; return gmailToken(true) },
+  async gget(path) { if (!(gTok && gRead && Date.now() < gExp - 60000)) { const e = new Error('Mailbox not connected'); e.code = 'reauth'; throw e } return gfetch('https://gmail.googleapis.com/gmail/v1/users/me/' + path) },
   async sendAs() { const d = await gfetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'); return (d.sendAs || []).filter(x => x.verificationStatus !== 'pending').map(x => ({ email: x.sendAsEmail, name: x.displayName || '', primary: !!x.isPrimary, def: !!x.isDefault })) },
   async send(m) {
     await gmailToken(false); // ask for Gmail permission first, while the click still counts
