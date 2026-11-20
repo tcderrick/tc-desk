@@ -45,7 +45,8 @@ const dbShim = {
     return {
       doc: id => ({
         set: data => setDoc(doc(fs, path, id), enc(JSON.parse(JSON.stringify(data)))),
-        delete: () => deleteDoc(doc(fs, path, id))
+        delete: () => deleteDoc(doc(fs, path, id)),
+        get: async () => { const d = await getDoc(doc(fs, path, id)); return d.exists() ? dec(d.data()) : null }
       }),
       onSnapshot(next, err) {
         // Show what's saved on this device right away, then update when the server answers.
