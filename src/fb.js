@@ -237,8 +237,9 @@ const sampleShim = {
         return JSON.parse(t);
       } catch (e) {
         lastErr = e; const msg = String(e && (e.message || e));
-        if (/not found|404|is not supported|unsupported model/i.test(msg)) continue;
-        if (/API has not been used|disabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg)) { const er = new Error('Gemini isn\'t turned on for this project yet. In Firebase, open AI Logic and click Get started with the Gemini Developer API.'); er.code = 'setup'; throw er }
+        const setup = /genai config not found|genai-config-not-found|API has not been used|disabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg);
+        if (!setup && /not found|404|is not supported|unsupported model/i.test(msg)) continue;
+        if (setup) { const er = new Error('Gemini isn\'t turned on for this project yet. In Firebase, open AI Logic and click Get started with the Gemini Developer API.'); er.code = 'setup'; throw er }
         if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) { const er = new Error('Gemini\'s free limit is used up for now. Try again in a minute or two.'); er.code = 'rate_limited'; throw er }
         throw e;
       }
