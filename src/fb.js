@@ -60,7 +60,7 @@ const downloadsShim = {
 };
 
 /* ---------- login screen ---------- */
-const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><i></i>TC Desk</div>${html}</div></div>`; };
+const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><img src="/favicon.svg" width="30" height="30" alt="">TC Desk</div>${html}</div></div>`; };
 function loginScreen(msg) {
   shell(`<p class="mut">Sign in to continue.</p>
   ${msg ? `<div class="lmsg">${msg}</div>` : ''}
