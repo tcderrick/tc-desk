@@ -6,7 +6,7 @@ import {
   setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import {
-  initializeFirestore, collection, doc, setDoc, deleteDoc, onSnapshot,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot,
   getDocs, getDoc, query, limit, writeBatch
 } from 'firebase/firestore';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
@@ -23,7 +23,9 @@ const ADMINS = ['tc@derrick.club'];
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
-const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
+let fs;
+try { fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }) }
+catch (e) { fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true }) }
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const $ = s => document.querySelector(s);
@@ -46,8 +48,11 @@ const dbShim = {
         delete: () => deleteDoc(doc(fs, path, id))
       }),
       onSnapshot(next, err) {
-        return onSnapshot(collection(fs, path),
-          s => next({ docs: s.docs.map(d => ({ id: d.id, data: () => dec(d.data()) })), metadata: { fromCache: s.metadata.fromCache } }),
+        // Show what's saved on this device right away, then update when the server answers.
+        let lastFC = null;
+        return onSnapshot(collection(fs, path), { includeMetadataChanges: true },
+          s => { const fc = s.metadata.fromCache; if (!s.docChanges().length && fc === lastFC) return; lastFC = fc;
+            next({ docs: s.docs.map(d => ({ id: d.id, data: () => dec(d.data()) })), metadata: { fromCache: fc && s.empty } }) },
           e => { console.error(path, e); err && err(e); });
       }
     };
