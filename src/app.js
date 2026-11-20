@@ -1670,7 +1670,7 @@ const fmtWhen2=t=>new Date(t).toLocaleString('en-US',{weekday:'short',month:'sho
 const outPending=()=>(S.outbox||[]).filter(o=>o.st!=='sent');
 const outBadge=()=>{const n=outPending().length;return n?` <span class="nbadge" style="background:#475467">${n}</span>`:''};
 function refreshOutBadge(){outBanner()}
-function outWatch(){if(!outOn()||S._outW)return;S._outW=1;db.collection('outbox').onSnapshot(sn=>{S.outbox=sn.docs.map(d=>Object.assign(d.data(),{id:d.id}));refreshOutBadge();if(S.view==='outbox')renderOutbox();outTick()})}
+function outWatch(){if(!outOn()||S._outW)return;S._outW=1;db.collection('outbox').onSnapshot(sn=>{S.outbox=sn.docs.map(d=>Object.assign(d.data(),{id:d.id}));refreshOutBadge();const sig=JSON.stringify(S.outbox.map(o=>[o.id,o.st,o.sendAt,o.subject,o.to,o.cc,o.err,o.sentAt,(o.html||'').length]));if(S.view==='outbox'&&sig!==S._obSig){S._obSig=sig;const y=window.scrollY;renderOutbox();window.scrollTo(0,y)}outTick()})}
 async function outPutAtt(oid,files){const meta=[];for(let i=0;i<files.length;i++){const f=files[i];const b=new Uint8Array(await f.arrayBuffer());let s='';for(let j=0;j<b.length;j+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(j,j+0x8000));const d=btoa(s);const n=Math.max(1,Math.ceil(d.length/700000));for(let c=0;c<n;c++)await db.collection('outatt').doc(oid+'_'+i+'_'+c).set({d:d.slice(c*700000,(c+1)*700000)});meta.push({name:f.name,type:f.type||'application/octet-stream',size:f.size,n})}return meta}
 async function outGetAtt(o){const out=[];for(let i=0;i<(o.att||[]).length;i++){const a=o.att[i];let d='';for(let c=0;c<a.n;c++){const x=await db.collection('outatt').doc(o.id+'_'+i+'_'+c).get();if(!x||!x.d)throw new Error('An attachment for this email is missing ('+a.name+')');d+=x.d}const bin=atob(d);const u=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)u[j]=bin.charCodeAt(j);out.push(new File([u],a.name,{type:a.type}))}return out}
 async function outDelAtt(o){for(let i=0;i<(o.att||[]).length;i++)for(let c=0;c<o.att[i].n;c++){try{await db.collection('outatt').doc(o.id+'_'+i+'_'+c).delete()}catch(e){}}}
@@ -1686,11 +1686,11 @@ function outDue(){const now=Date.now(),me=myLogin();return (S.outbox||[]).filter
 async function outTick(){if(!outOn()||S._outBusy)return;try{outSyncAll()}catch(e){}const due=outDue();if(!due.length||!window.tcdMail.connected()){outBanner();return}S._outBusy=1;let n=0;try{for(const o of due){try{await outSend(o);n++}catch(e){}}}finally{S._outBusy=0;outBanner();if(n)toast(n===1?'Scheduled email sent':n+' scheduled emails sent');if(S.view==='outbox')renderOutbox()}}
 setInterval(outTick,30000);
 /* keep queued/scheduled copies in step with edits on the deal */
-function outSyncAll(){if(!outOn()||S._outSyncing)return;const L=(S.outbox||[]).filter(o=>o.st==='queued'||o.st==='failed');if(!L.length)return;S._outSyncing=1;
+function outSyncAll(){if(!outOn()||S._outSyncing)return;const me=myLogin();const L=(S.outbox||[]).filter(o=>(o.st==='queued'||o.st==='failed')&&(o.by||'')===me);if(!L.length)return;S._outSyncing=1;
  try{const keep=S.emailSel;L.forEach(o=>{const tx=getTx(o.txId);const e=tx&&(tx.emails||[]).find(x=>x.id===o.emailId);if(!e||e.out!==o.id)return;S.emailSel=e.id;let p;try{p=emParts(tx)}catch(x){return}if(!p||p.e.id!==e.id)return;
   if(S.view==='detail'&&S.txId===tx.id&&S.tab==='emails'&&keep===e.id){const ed=$('#emBody');if(ed&&document.activeElement===ed)return}
   const M=emOut(p);const nx={to:M.to,cc:M.cc,bcc:M.bcc,subject:M.subject,html:M.html,text:M.text,name:e.name||o.name,addr:tx.f.address||o.addr};
-  if(Object.keys(nx).some(k=>(o[k]||'')!==(nx[k]||''))){Object.assign(o,nx,{edAt:Date.now()});if(o.st==='failed'){o.st='queued';delete o.err}outSave(o)}});S.emailSel=keep}finally{S._outSyncing=0}}
+  if(Date.now()-(o.edAt||0)>10000&&Object.keys(nx).some(k=>(o[k]||'')!==(nx[k]||''))){Object.assign(o,nx,{edAt:Date.now()});if(o.st==='failed'){o.st='queued';delete o.err}outSave(o)}});S.emailSel=keep}finally{S._outSyncing=0}}
 setInterval(outSyncAll,4000);
 
 function outBanHTML(){if(!outOn())return '';const d=outDue();return d.length?`<div class="banner obban">${d.length===1?'A scheduled email is':d.length+' scheduled emails are'} ready to go, but Gmail needs you to reconnect first. <button class="btn sm pri" data-act="ob-due">Send now</button></div>`:''}
