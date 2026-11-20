@@ -34,3 +34,4 @@ try gcloud pubsub topics add-iam-policy-binding gmail-in --member=serviceAccount
 
 step "Done"
 gcloud projects get-iam-policy $P --flatten="bindings[].members" --filter="bindings.members:github-deploy@" --format="value(bindings.role)" 2>/dev/null | sed 's/^/   deploy account has: /'
+# rerun after deploy account was given Owner
