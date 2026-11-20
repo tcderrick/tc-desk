@@ -570,6 +570,7 @@ function chatUpdate(){if(S.view!=='detail')return;const tx=getTx();if(!tx)return
 async function chatSend(){const ta=$('#chatIn');const v=ta&&ta.value.trim();if(!v)return;const tx=getTx();if(!tx)return;const m={id:uid(),txId:tx.id,by:me(),text:v,at:Date.now(),createdAt:Date.now()};ta.value='';S.chat.push(m);markSeen(tx.id);chatUpdate();try{await save('chat',m)}catch(e){dbErr(e)}}
 function sumTab(tx){return `<div class="row between" style="margin-bottom:10px"><span class="hint">Click any section to edit it. Use − / + to hide a section; hidden sections are left out of the PDF.</span><div class="row"><button class="btn sm" data-act="sum-all" data-v="open">Show all</button>${downloads?'<button class="btn pri sm" data-act="sum-pdf">Download PDF</button>':''}</div></div><div class="sumwrap"><div class="sumcol">${summaryHTML(tx)}</div>${kindOf(tx)==='transaction'||kindOf(tx)==='listing'?chatPanel(tx):''}</div>`}
 function fillParty(tx,p,c){const P=PARTY[p];['company','phone','email','dre'].forEach(k=>{if(P[k]&&c[k]){tx.f[P[k]]=c[k];const el=app.querySelector(`[data-f="${P[k]}"]`);if(el)el.value=c[k]}});tx.f[p+'_cid']=c.id;touch(tx)}
+function findContact(role,name){const n=String(name||'').trim().toLowerCase();if(!n)return null;const cl=CLIENT_ROLES.includes(role);return S.contacts.find(x=>x.name&&x.name.trim().toLowerCase()===n&&(x.role===role||(cl&&CLIENT_ROLES.includes(x.role))))||null}
 function syncContact(tx,p){const P=PARTY[p];const name=String(tx.f[P.name]||'').trim();if(name.length<2)return;
  const vals={};['company','phone','email','dre'].forEach(k=>{if(P[k])vals[k]=String(tx.f[P[k]]||'').trim()});
  let c=S.contacts.find(x=>x.id===tx.f[p+'_cid']);if(c&&c.name.trim().toLowerCase()!==name.toLowerCase())c=null;if(!c)c=findContact(P.role,name);
@@ -826,7 +827,7 @@ function aiReview(tx,r){const L=kindOf(tx)==='listing';const fields=L?AI_LS:AI_T
  $('#aiApply').onclick=()=>{let n=0;tx=getTx(tx.id)||tx;document.querySelectorAll('.aiOn').forEach(cb=>{if(!cb.checked)return;const x=rows[cb.dataset.i];const v=document.querySelector(`.aiV[data-i="${cb.dataset.i}"]`).value;tx.f[x.k]=v;n++});
   document.querySelectorAll('.aiDOn').forEach(cb=>{if(!cb.checked)return;const x=dayRows[cb.dataset.i];const c=tx.cont.find(y=>y.id===x.id);const v=document.querySelector(`.aiDV[data-i="${cb.dataset.i}"]`).value;if(c){if(x.date)c.date=v;else c.days=parseInt(v,10)||0;n++}});
   if(tx.f.loan_type==='Cash'){tx.f.loan_amount=tx.f.loan_amount||'0'}
-  Object.keys(PARTY).forEach(p=>{if(tx.f[PARTY[p].name])syncContact(tx,p)});touch(tx,1);$('#modal').classList.add('hidden');renderTab();toast(`Applied ${n} value${n===1?'':'s'} from the contract`)}}
+  Object.keys(PARTY).forEach(p=>{try{if(tx.f[PARTY[p].name])syncContact(tx,p)}catch(e){console.error(e)}});touch(tx,1);$('#modal').classList.add('hidden');renderTab();toast(`Applied ${n} value${n===1?'':'s'} from the contract`)}}
 
 /* ---------- calendar ---------- */
 function icsFor(tx){const f=tx.f;const ev=[];const esc2=s=>String(s||'').replace(/\\/g,'\\\\').replace(/[,;]/g,m=>'\\'+m).replace(/\n/g,'\\n');const addr=[f.address,f.city].filter(Boolean).join(', ');
