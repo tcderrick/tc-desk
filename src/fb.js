@@ -9,6 +9,7 @@ import {
   initializeFirestore, collection, doc, setDoc, deleteDoc, onSnapshot,
   getDocs, getDoc, query, limit, writeBatch
 } from 'firebase/firestore';
+import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBj-SgpUHdzVjZQPDeTj-PxFdYgH6tvROo',
@@ -209,6 +210,38 @@ window.tcdMail = {
   }
 };
 
+/* ---------- contract reading with Gemini (Firebase AI Logic) ---------- */
+const GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+let aiInst = null;
+const blobB64 = b => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(b) });
+const sampleShim = {
+  limits: async () => ({ images: true }),
+  async json(prompt, opts = {}) {
+    if (!aiInst) aiInst = getAI(fbApp, { backend: new GoogleAIBackend() });
+    const parts = [{ text: prompt }];
+    for (const im of (opts.images || []).slice(0, 16)) {
+      if (im instanceof Blob) parts.push({ inlineData: { mimeType: im.type || 'image/jpeg', data: await blobB64(im) } });
+      else if (typeof im === 'string' && im.startsWith('data:')) { const m = /^data:([^;]+);base64,(.*)$/.exec(im); if (m) parts.push({ inlineData: { mimeType: m[1], data: m[2] } }) }
+    }
+    let lastErr = null;
+    for (const name of GEMINI_MODELS) {
+      try {
+        const model = getGenerativeModel(aiInst, { model: name, generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } });
+        const r = await model.generateContent(parts);
+        let t = r.response.text().trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+        return JSON.parse(t);
+      } catch (e) {
+        lastErr = e; const msg = String(e && (e.message || e));
+        if (/not found|404|is not supported|unsupported model/i.test(msg)) continue;
+        if (/API has not been used|disabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg)) { const er = new Error('Gemini isn\'t turned on for this project yet. In Firebase, open AI Logic and click Get started with the Gemini Developer API.'); er.code = 'setup'; throw er }
+        if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) { const er = new Error('Gemini\'s free limit is used up for now. Try again in a minute or two.'); er.code = 'rate_limited'; throw er }
+        throw e;
+      }
+    }
+    throw lastErr || new Error('No Gemini model was available');
+  }
+};
+
 /* ---------- start ---------- */
 let started = false;
 async function start(user) {
@@ -226,7 +259,8 @@ async function start(user) {
     }
   } else syncLogins();
   window.TCD_HOSTED = { email, admin };
-  window.claude = { use: async n => n === 'db' ? dbShim : n === 'downloads' ? downloadsShim : n === 'user' ? { id: async () => user.uid } : null };
+  window.claude = { use: async n => n === 'db' ? dbShim : n === 'downloads' ? downloadsShim : n === 'user' ? { id: async () => user.uid } : n === 'sample' ? sampleShim : null };
+  window.TCD_AI = 'Gemini';
   userChip(email);
   // first run: offer to restore when the database is empty
   if (admin) {
