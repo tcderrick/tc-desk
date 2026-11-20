@@ -237,6 +237,7 @@ const sampleShim = {
         return JSON.parse(t);
       } catch (e) {
         lastErr = e; const msg = String(e && (e.message || e));
+        if (/App Check/i.test(msg)) { const er = new Error('Firebase is blocking Gemini because App Check is turned on for AI Logic. In Firebase, open Security, then App Check, then the APIs tab, click Firebase AI Logic and choose Unenforce. Then try again.'); er.code = 'setup'; throw er }
         const setup = /genai config not found|genai-config-not-found|API has not been used|disabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg);
         if (!setup && /not found|404|is not supported|unsupported model/i.test(msg)) continue;
         if (setup) { const er = new Error('Gemini isn\'t turned on for this project yet. In Firebase, open AI Logic and click Get started with the Gemini Developer API.'); er.code = 'setup'; throw er }
