@@ -61,6 +61,7 @@ const dbShim = {
 };
 const downloadsShim = {
   async save({ filename, data }) {
+    if (!(data instanceof Blob)) data = new Blob([typeof data === 'string' ? data : JSON.stringify(data)], { type: 'application/octet-stream' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(data); a.download = filename;
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove() }, 2000);
   }
