@@ -10,6 +10,7 @@ import {
   getDocs, getDoc, query, limit, writeBatch
 } from 'firebase/firestore';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
+import { getMessaging, getToken, deleteToken, onMessage, isSupported as msgSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyBj-SgpUHdzVjZQPDeTj-PxFdYgH6tvROo',
@@ -202,9 +203,12 @@ async function gfetch(url, opt = {}) {
   if (!r.ok) { let m = ''; try { m = (await r.json()).error.message } catch (e) {} const e = new Error(m || ('Gmail error ' + r.status)); e.code = 'gmail'; e.status = r.status; throw e }
   return r.json();
 }
+let useSrv = false;
 window.tcdMail = {
-  connected: () => !!(gTok && Date.now() < gExp - 60000),
-  connect: () => gmailToken(true),
+  useServer(v) { useSrv = !!v },
+  get server() { return useSrv },
+  connected: () => useSrv || !!(gTok && Date.now() < gExp - 60000),
+  connect: () => useSrv ? Promise.resolve('') : gmailToken(true),
   // Reading mail (for each deal's file email). Only asked of the person whose mailbox receives it.
   wantRead() { wantRead = true },
   readReady: () => !!(gTok && gRead && Date.now() < gExp - 60000),
@@ -290,3 +294,24 @@ async function start(user) {
 finishEmailLink().finally(() => {
   onAuthStateChanged(auth, u => { if (u) start(u); else if (!started) loginScreen(); });
 });
+
+
+/* ---------- push notifications (Firebase Cloud Messaging) ---------- */
+let msgInst = null, pushOK = false;
+msgSupported().then(ok => { pushOK = ok && 'Notification' in window && 'serviceWorker' in navigator; if (pushOK) { try { msgInst = getMessaging(fbApp); onMessage(msgInst, p => { const n = (p && p.notification) || {}; const t = window.toast || (x => console.log(x)); try { t((n.title ? n.title + ': ' : '') + (n.body || 'New email')) } catch (e) {} }) } catch (e) { pushOK = false } } }).catch(() => {});
+const tokHash = t => { let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return 'p' + (h >>> 0).toString(36) + t.length.toString(36) };
+window.tcdPush = {
+  get supported() { return pushOK },
+  status() { if (!pushOK) return 'off'; if (Notification.permission === 'denied') return 'blocked'; return (Notification.permission === 'granted' && localStorage.getItem('tcdPushTok')) ? 'on' : 'off' },
+  async enable(name) {
+    if (!pushOK) throw new Error("This browser can't show notifications");
+    const perm = await Notification.requestPermission(); if (perm !== 'granted') throw new Error('Notifications were not allowed');
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const token = await getToken(msgInst, { serviceWorkerRegistration: reg }); if (!token) throw new Error('Could not get a notification token');
+    const u = auth.currentUser;
+    await setDoc(doc(fs, 'push', tokHash(token)), { token, email: (u && u.email || '').toLowerCase(), name: name || '', on: true, at: Date.now(), ua: navigator.userAgent.slice(0, 160) });
+    localStorage.setItem('tcdPushTok', token); return true;
+  },
+  async disable() { const t = localStorage.getItem('tcdPushTok'); localStorage.removeItem('tcdPushTok'); if (t) { try { await deleteDoc(doc(fs, 'push', tokHash(t))) } catch (e) {} try { await deleteToken(msgInst) } catch (e) {} } },
+  async test() { const reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js') || await navigator.serviceWorker.register('/firebase-messaging-sw.js'); await reg.showNotification('TC Desk', { body: 'Notifications are working on this computer.', icon: '/icon-192.png' }) }
+};

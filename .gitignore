@@ -1,2 +1,4 @@
 node_modules/
 public/
+functions/.env
+functions/node_modules

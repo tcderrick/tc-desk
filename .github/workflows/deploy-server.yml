@@ -1,0 +1,46 @@
+name: Deploy TC Desk server
+on:
+  push:
+    branches: [main]
+    paths: ['functions/**', '.github/workflows/deploy-server.yml', 'scripts/server-setup.sh']
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+concurrency: { group: server-deploy, cancel-in-progress: false }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Sign in to Google (no key file needed)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/836507322815/locations/global/workloadIdentityPools/github/providers/tc-desk-repo
+          service_account: github-deploy@tc-desk.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: One-time Google Cloud setup (safe to repeat)
+        run: bash scripts/server-setup.sh 2>&1 | tee -a deploy.log
+      - name: Server settings
+        run: node -e "const s=require('fs').readFileSync('src/fb.js','utf8');const m=/const ADMINS = \[([^\]]*)\]/.exec(s);const a=(m?m[1]:'').replace(/['\s]/g,'');require('fs').writeFileSync('functions/.env','ADMINS='+a+'\n')"
+      - run: cd functions && npm install --no-audit --no-fund 2>&1 | tail -3 | tee -a ../deploy.log
+      - name: Deploy server functions
+        run: |
+          set -o pipefail
+          for i in 1 2 3; do
+            if npx --yes firebase-tools@latest deploy --only functions --project tc-desk --non-interactive --force 2>&1 | tee -a deploy.log; then echo "DEPLOY OK" | tee -a deploy.log; exit 0; fi
+            echo "Deploy try $i failed, waiting for Google permissions to settle" | tee -a deploy.log; sleep 90
+          done
+          exit 1
+      - name: Save the log where TC Desk's helper can read it
+        if: always()
+        run: |
+          git config user.name "TC Desk Bot"; git config user.email tcdesk-bot@users.noreply.github.com
+          mkdir -p /tmp/lg && cp deploy.log /tmp/lg/deploy.log 2>/dev/null || echo "no log" > /tmp/lg/deploy.log
+          echo "run ${{ github.run_id }} ${{ job.status }} $(date -u)" >> /tmp/lg/deploy.log
+          git fetch origin deploy-logs 2>/dev/null && git checkout -B deploy-logs origin/deploy-logs || git checkout --orphan deploy-logs
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          cp /tmp/lg/deploy.log deploy.log && git add deploy.log && git commit -qm "deploy log ${{ github.run_id }}" && git push -f origin deploy-logs
