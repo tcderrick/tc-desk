@@ -123,6 +123,10 @@ document.addEventListener('keydown',e=>{const t=e.target;if(!t)return;if(t.id===
 document.addEventListener('input',e=>{const t=e.target;if(!t||t.id!=='pcFind')return;const q=t.value.trim().toLowerCase();const box=$('#pcRes');if(!box)return;if(!q){box.classList.add('hidden');return}
  const R=S.tx.filter(x=>(String(x.f.address||'')+' '+(x.f.city||'')+' '+titleOf(x)).toLowerCase().includes(q)).sort((a,b)=>(isOpen(b)?1:0)-(isOpen(a)?1:0)).slice(0,8);
  box.innerHTML=R.length?R.map(x=>`<button class="gor" data-act="pc-go" data-id="${x.id}"><b>${esc(txLabel(x))}</b><span class="mut small"> ${esc(titleOf(x).split(' | ')[0]||'')}${isOpen(x)?'':' · '+esc(x.f.status||'')}</span></button>`).join(''):'<div class="mut small" style="padding:8px">No matches</div>';box.classList.remove('hidden')});
+(()=>{let from=null;document.addEventListener('dragstart',e=>{const h=e.target.closest&&e.target.closest('.tldrag');if(!h)return;from=+h.closest('tr').dataset.tl;h.closest('tr').classList.add('dragging');try{e.dataTransfer.setData('text/plain','tl');e.dataTransfer.effectAllowed='move'}catch(x){}});
+ document.addEventListener('dragover',e=>{if(from==null)return;const tr=e.target.closest&&e.target.closest('tr[data-tl]');if(!tr)return;e.preventDefault();document.querySelectorAll('tr.tlover').forEach(x=>x.classList.remove('tlover'));tr.classList.add('tlover')});
+ document.addEventListener('drop',e=>{if(from==null)return;const tr=e.target.closest&&e.target.closest('tr[data-tl]');const f=from;from=null;document.querySelectorAll('tr.tlover,tr.dragging').forEach(x=>x.classList.remove('tlover','dragging'));if(!tr||!S.tlRows)return;e.preventDefault();const to=+tr.dataset.tl;if(to===f)return;const [x]=S.tlRows.splice(f,1);S.tlRows.splice(to,0,x);tlRenum();render()});
+ document.addEventListener('dragend',()=>{from=null;document.querySelectorAll('tr.tlover,tr.dragging').forEach(x=>x.classList.remove('tlover','dragging'))})})();
 let db=null,downloads=null;
 const dirty=new Set(),timers={},chains={};
 let lastFocus=null;
@@ -389,10 +393,13 @@ function parseTL(line){const r={no:'',ap:'',ms:false,who:'',drv:'',days:0,biz:fa
  r.text=line.replace(/\s+/g,' ').trim();return r}
 function serTL(r){const d=r.drv?`[${r.drv}${r.days>=0?'+':''}${r.days||0}] `:'';return `${r.no?'#'+r.no+': ':''}${d}${r.ap?'{'+r.ap+'} ':''}${r.text}${r.who==='*'?' @All':r.who?' @'+r.who:''}${r.ms?' ★':''}${r.key?' {key}':''}${r.pv?' {priv}':''}${r.bm?' {flag}':''}${r.biz?' {biz}':''}${r.em&&r.em.length?' <em:'+r.em.join(',')+'>':''}`.replace(/\s+/g,' ').trim()}
 const TL_DRV=[['MA','Acceptance (MA)'],['CLS','Before closing (CLS)'],['EMD','EMD date'],['DISC','Seller disclosures'],['INSP','Inspection'],['INS','Insurance'],['TITLE','Prelim title'],['APPR','Appraisal'],['LOAN','Loan'],['HOA','HOA docs'],['VP','Walkthrough (VP)'],['COE','Closing date'],['LIST','Listing start'],['FIRST','First look'],['LIVE','Go live'],['EXP','Expiration'],['PHOTOS','Photos'],['TODAY','Day it is added'],['','No date']];
+function tlRenum(removed){const R=S.tlRows;const map={};R.forEach((r,i)=>{if(r.no)map[r.no]=String(i+1)});
+ if(removed&&removed.no){R.forEach(r=>{if(r.drv==='#'+removed.no){r.drv=removed.drv||'';r.days=(parseInt(r.days,10)||0)+(removed.drv?(parseInt(removed.days,10)||0):0);if(!r.drv)r.days=0}})}
+ R.forEach(r=>{if(r.drv&&r.drv[0]==='#'){const o=r.drv.slice(1);if(map[o])r.drv='#'+map[o]}});R.forEach((r,i)=>{r.no=String(i+1)})}
 function tlEditor(t){S.tlRows=S.tlRows&&S.tlFor===t.id?S.tlRows:(t.items||[]).map(parseTL);S.tlFor=t.id;const R=S.tlRows;const q=(S.tlQ||'').toLowerCase();
  const nos=R.map(r=>r.no).filter(Boolean);const ico=(k,on,l,tt)=>`<button class="tli ${on?'on':''}" data-act="tl-tog" data-k="${k}" title="${tt}">${l}</button>`;
  return `<input id="tlQ" placeholder="Search tasks…" value="${esc(S.tlQ||'')}" style="margin-bottom:8px"><div class="scroll"><table class="tlt"><thead><tr><th><button class="thsort" data-act="tl-sort" title="Sort by number">#&nbsp;⇅</button></th><th>Features</th><th>Description</th><th>Assigned</th><th>Driver</th><th>Days</th><th>Applies to</th><th></th></tr></thead><tbody>
- ${R.map((r,ix)=>!q||r.text.toLowerCase().includes(q)?`<tr data-tl="${ix}" class="${r.ms?'crit':''}"><td><input class="tln" data-tlf="no" value="${esc(r.no)}" placeholder="${ix+1}"></td>
+ ${R.map((r,ix)=>!q||r.text.toLowerCase().includes(q)?`<tr data-tl="${ix}" class="${r.ms?'crit':''}"><td class="nw"><span class="tldrag" draggable="true" title="Drag to reorder">⠿</span><input class="tln" data-tlf="no" value="${esc(r.no)}" placeholder="${ix+1}"></td>
  <td class="nw">${ico('ms',r.ms,'⚠','Critical / milestone')}${ico('key',r.key,'🔑','Key task')}${ico('pv',r.pv,'🙈','Private (hidden from agents)')}${ico('bm',r.bm,'⚑','Flag')}${ico('biz',r.biz,'B','Count business days')}<button class="tli em ${r.em.length?'on':''}" data-act="tl-em" title="${esc(r.em.map(id=>(S.email.find(x=>x.id===id)||{}).name||id).join(', ')||'Link emails')}">✉${r.em.length?' '+r.em.length:''}</button></td>
  <td><input data-tlf="text" value="${esc(r.text)}" style="min-width:260px;${r.ms?'font-weight:700':''}"></td>
  <td><select data-tlf="who" style="width:auto">${whoOpts(r.who)}</select></td>
@@ -1193,9 +1200,9 @@ app.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if
  case 'tpl-new':{S.tlRows=null;S.tlName=null;S.tlRaw=false;const d={id:uid(),name:''};if(S.tplKind==='checklist')d.items=[];else{d.body='';if(S.tplKind==='email'){d.to='';d.subject=''}}S.tplDraft=d;S.tplId=d.id;render();$('#tName').focus();break}
  case 'tl-tog':{const ix=+b.closest('tr').dataset.tl;const r=S.tlRows[ix];r[b.dataset.k]=!r[b.dataset.k];render();break}
  case 'tl-sort':{S.tlDir=S.tlDir===1?-1:1;const n=r=>parseInt(r.no,10);S.tlRows.sort((a,b)=>{const x=n(a),y=n(b);if(isNaN(x)&&isNaN(y))return 0;if(isNaN(x))return 1;if(isNaN(y))return -1;return (x-y)*S.tlDir});render();break}
- case 'tl-add':S.tlRows.push(parseTL('[MA+0] '));S.tlQ='';render();{const ins=document.querySelectorAll('[data-tlf=text]');ins.length&&ins[ins.length-1].focus()}break;
- case 'tl-del':{const ix=+b.closest('tr').dataset.tl;S.tlRows.splice(ix,1);render();break}
- case 'tl-mv':{const ix=+b.closest('tr').dataset.tl,d=+b.dataset.d;if(ix+d<0||ix+d>=S.tlRows.length)break;const [x]=S.tlRows.splice(ix,1);S.tlRows.splice(ix+d,0,x);render();break}
+ case 'tl-add':S.tlRows.push(Object.assign(parseTL('[MA+0] '),{no:String(S.tlRows.length+1)}));S.tlQ='';render();{const ins=document.querySelectorAll('[data-tlf=text]');ins.length&&ins[ins.length-1].focus()}break;
+ case 'tl-del':{const ix=+b.closest('tr').dataset.tl;const [gone]=S.tlRows.splice(ix,1);tlRenum(gone);render();toast('Task removed. Numbers and "after task" links updated');break}
+ case 'tl-mv':{const ix=+b.closest('tr').dataset.tl,d=+b.dataset.d;if(ix+d<0||ix+d>=S.tlRows.length)break;const [x]=S.tlRows.splice(ix,1);S.tlRows.splice(ix+d,0,x);tlRenum();render();break}
  case 'tl-raw':S.tlRaw=true;render();break;
  case 'tl-tbl':{const ta=$('#tItems');S.tlRaw=false;if(ta){S.tlRows=ta.value.split('\n').filter(x=>x.trim()).map(parseTL)}render();break}
  case 'tl-em':{const ix=+b.closest('tr').dataset.tl;const r=S.tlRows[ix];const grp=t=>t.folder||'';pickModal('Emails for: '+(r.text||'task'),S.email.map(t=>({id:t.id,name:t.name,group:grp(t),added:r.em.includes(t.id)})),ids=>{r.em=ids;render()});setTimeout(()=>{r.em.forEach(id=>{const c=document.querySelector(`#modal [data-pk="${id}"]`);if(c){c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}))}});const go=$('#pkGo');if(go){go.textContent='Save links';go.disabled=false}},30);break}
