@@ -1056,8 +1056,13 @@ function listingSummary(tx,opt={}){const f=tx.f;const m=mergeMap(tx);const pr=!!
  return `<div class="sum ${pr?'print':''}"><div class="sh"><div><h1>Listing Summary</h1><div class="addr">${esc(m.full_address||'')}${f.zip?' '+esc(f.zip):''}</div></div><div class="shr">${sumLogos(tx)}</div></div>${secs}${notesSum(tx)}</div>`}
 async function sumPDF(tx){if(typeof html2canvas==='undefined'||!window.jspdf){toast('The PDF tools did not load. Reload the page and try again.');return}
  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;left:-10000px;top:0;width:780px;background:#fff';wrap.innerHTML=summaryHTML(tx,{print:true});document.body.appendChild(wrap);
- try{const node=wrap.firstElementChild;const cv=await html2canvas(node,{scale:2,backgroundColor:'#ffffff'});const {jsPDF}=window.jspdf;const M0=24,W0=612,h0=Math.ceil(cv.height*(W0-2*M0)/cv.width)+2*M0;const pdf=new jsPDF({unit:'pt',format:[W0,Math.max(h0,200)],orientation:'portrait'});
-  const iw=W0-2*M0,h=cv.height*iw/cv.width;pdf.addImage(cv.toDataURL('image/jpeg',0.95),'JPEG',M0,M0,iw,h);
+ try{const node=wrap.firstElementChild;const cv=await html2canvas(node,{scale:2,backgroundColor:'#ffffff',width:node.scrollWidth,windowWidth:wrap.scrollWidth});const {jsPDF}=window.jspdf;
+  const PW=612,PH=792,M=30,iw=PW-2*M,ih=PH-2*M;const k=cv.width/iw;const pageH=Math.floor(ih*k);
+  const ctx=cv.getContext('2d');const blank=y=>{const d=ctx.getImageData(0,y,cv.width,1).data;for(let i=0;i<d.length;i+=16){if(d[i]<245||d[i+1]<245||d[i+2]<245)return false}return true};
+  const pdf=new jsPDF({unit:'pt',format:'letter',orientation:'portrait'});let y=0,pg=0;
+  while(y<cv.height-4){let end=Math.min(y+pageH,cv.height);if(end<cv.height){let b2=end;const lim=y+Math.floor(pageH*0.7);while(b2>lim&&!blank(b2))b2--;if(b2>lim)end=b2}
+   const sl=document.createElement('canvas');sl.width=cv.width;sl.height=end-y;const sc=sl.getContext('2d');sc.fillStyle='#fff';sc.fillRect(0,0,sl.width,sl.height);sc.drawImage(cv,0,y,cv.width,end-y,0,0,cv.width,end-y);
+   if(pg)pdf.addPage('letter','portrait');pdf.addImage(sl.toDataURL('image/jpeg',0.92),'JPEG',M,M,iw,(end-y)/k);pg++;y=end}
   const name=(kindOf(tx)==='listing'?'Listing':'Transaction')+' Summary - '+(tx.f.address||'untitled').replace(/[\\/:*?"<>|]/g,'')+'.pdf';
   await downloads.save({filename:name,data:pdf.output('blob')})}
  catch(e){if(!(e&&/declin/i.test(String(e.code))))toast('Could not create the PDF')}finally{wrap.remove()}}
