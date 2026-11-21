@@ -1906,5 +1906,8 @@ async function fmAct(a,b,tx){
 
 document.addEventListener('change',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.fmwho){const rec=(S.fmail||[]).find(x=>x.id===t.dataset.fmwho);if(!rec)return;rec.who=t.value;db.collection('fmail').doc(rec.id).set(rec).catch(dbErr);toast(t.value?'Assigned to '+t.value:'Unassigned');renderTab()}});
 
+
+// Critical dates: clicking anywhere in a date box opens the calendar; the part you clicked (month, day or year) stays selected for typing.
+document.addEventListener('click',e=>{const t=e.target;if(!t||t.tagName!=='INPUT'||t.type!=='date'||t.disabled||t.readOnly||!t.closest('table.cdt2'))return;try{t.showPicker()}catch(err){}},true);
 init().then(checkImport).then(checkClients).then(checkVault).then(()=>setTimeout(migrateArchive,3000));setTimeout(seedFolders,5000);setTimeout(seedFolders,15000);
 })();
