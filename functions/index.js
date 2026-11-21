@@ -99,7 +99,7 @@ async function sendOne(m, byEmail, cfg) {
   let from = m.from || '';
   if (allowed.length) { if (!allowed.some(a => addrOf(a) === addrOf(from))) from = allowed[0]; } else from = box;
   let cc = m.cc || ''; const ccTo = String(cfg.ccTo || '').trim();
-  if (cfg.cc && ccTo && byEmail !== ccTo.toLowerCase() && !(String(m.to) + ',' + cc + ',' + String(m.bcc || '')).toLowerCase().includes(ccTo.toLowerCase())) cc = cc ? cc + ', ' + ccTo : ccTo;
+  if (!m.noCc && cfg.cc && ccTo && byEmail !== ccTo.toLowerCase() && !(String(m.to) + ',' + cc + ',' + String(m.bcc || '')).toLowerCase().includes(ccTo.toLowerCase())) cc = cc ? cc + ', ' + ccTo : ccTo;
   if (!splitList(m.to).length && !splitList(cc).length && !splitList(m.bcc).length) throw new Error('Add at least one recipient');
   const mime = buildMime({ from, to: m.to || '', cc, bcc: m.bcc || '', subject: m.subject || '', html: m.html || '', text: m.text || '', files: m.files || [] });
   const r = await gmail(box, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media', { method: 'POST', body: mime, headers: { 'Content-Type': 'message/rfc822' } });
@@ -312,4 +312,29 @@ exports.pchatIn = onDocumentCreated({ document: 'pchat/{id}', memory: '256MiB' }
       fcmOptions: { link: `${APP_URL}/#v=detail&tx=${encodeURIComponent(m.txId)}&tab=pchat` } }
   });
   res.responses.forEach((r, i) => { const c = r.error && r.error.code; if (c && /registration-token-not-registered|invalid-registration-token/.test(c)) docs[i].ref.delete().catch(() => {}); });
+});
+
+/* ---------- sign-in links sent from the team address ---------- */
+const LINK_ORIGINS = ['https://app.derrick.club', 'https://tc-desk.web.app', 'https://tc-desk.firebaseapp.com'];
+exports.linkSend = onDocumentCreated({ document: 'linkreq/{id}', memory: '256MiB' }, async ev => {
+  const r = ev.data && ev.data.data(); if (!r) return;
+  try {
+    const email = String(r.email || '').trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+    let ok = ADMINS.includes(email) || (await db.doc('logins/' + email).get()).exists;
+    if (!ok) ok = !(await db.collection('portal').where('email', '==', email).limit(1).get()).empty;
+    if (!ok) return; // no access: send nothing, say nothing
+    const rl = db.doc('srv/lr_' + Buffer.from(email).toString('base64url').slice(0, 120));
+    const last = ((await rl.get()).data() || {}).at || 0; if (Date.now() - last < 60e3) return;
+    await rl.set({ at: Date.now() });
+    const origin = LINK_ORIGINS.find(o => String(r.url || '').startsWith(o)) || LINK_ORIGINS[0];
+    const link = await admin.auth().generateSignInWithEmailLink(email, { url: origin + '/', handleCodeInApp: true });
+    const cfg = await setting('sending');
+    const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:520px"><p>Hello,</p><p>Here's your link to sign in to TC Desk as <b>${email}</b>:</p><p><a href="${link}" style="display:inline-block;background:#101828;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none">Sign in</a></p><p style="color:#475467;font-size:13px">Open it on the same device where you asked for it. The link works once and expires soon. If you didn't ask to sign in, you can ignore this email.</p></div>`;
+    await sendOne({ to: email, subject: 'Your TC Desk sign-in link', html, text: `Sign in to TC Desk as ${email}:\n${link}\n\nOpen it on the same device where you asked for it. If you didn't ask to sign in, ignore this email.`, noCc: true }, '', cfg);
+  } catch (e) { console.error('linkSend', e.message); }
+  finally {
+    try { await ev.data.ref.delete(); } catch (e) {}
+    try { if (r.uid) await admin.auth().deleteUser(r.uid); } catch (e) {}
+  }
 });

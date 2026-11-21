@@ -35,3 +35,10 @@ try gcloud pubsub topics add-iam-policy-binding gmail-in --member=serviceAccount
 step "Done"
 gcloud projects get-iam-policy $P --flatten="bindings[].members" --filter="bindings.members:github-deploy@" --format="value(bindings.role)" 2>/dev/null | sed 's/^/   deploy account has: /'
 # rerun after deploy account was given Owner
+
+step "Sign-in links from the team address"
+try gcloud projects add-iam-policy-binding $P --member=serviceAccount:$SA --role=roles/firebaseauth.admin --condition=None --quiet
+T=$(gcloud auth print-access-token)
+curl -s -X PATCH -H "Authorization: Bearer $T" -H "X-Goog-User-Project: $P" -H "Content-Type: application/json" \
+  "https://identitytoolkit.googleapis.com/admin/v2/projects/$P/config?updateMask=signIn.anonymous.enabled" \
+  -d '{"signIn":{"anonymous":{"enabled":true}}}' | grep -o '"anonymous": {[^}]*}' | tr -d '\n' ; echo

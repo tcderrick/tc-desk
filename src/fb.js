@@ -2,7 +2,7 @@
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, reauthenticateWithPopup, linkWithPopup,
-  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
+  sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signInAnonymously,
   setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import {
@@ -70,6 +70,7 @@ const downloadsShim = {
 
 /* ---------- login screen ---------- */
 const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><img src="/favicon.svg" width="30" height="30" alt="">TC Desk</div>${html}</div></div>`; };
+let linkBusy = false;
 function loginScreen(msg) {
   shell(`<p class="mut">Sign in to continue.</p>
   ${msg ? `<div class="lmsg">${msg}</div>` : ''}
@@ -83,11 +84,21 @@ function loginScreen(msg) {
   $('#elForm').onsubmit = async ev => {
     ev.preventDefault(); const email = $('#elEmail').value.trim().toLowerCase();
     try {
-      await sendSignInLinkToEmail(auth, email, { url: location.origin + '/', handleCodeInApp: true });
+      linkBusy = true;
+      try {
+        // Ask TC Desk's server to email the link from the team address.
+        const a = await signInAnonymously(auth);
+        const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        await setDoc(doc(fs, 'linkreq', id), { uid: a.user.uid, email, url: location.origin + '/', at: Date.now() });
+        await signOut(auth);
+      } catch (e1) {
+        console.warn('server link', e1); try { if (auth.currentUser && auth.currentUser.isAnonymous) await signOut(auth); } catch (e2) {}
+        await sendSignInLinkToEmail(auth, email, { url: location.origin + '/', handleCodeInApp: true });
+      }
       localStorage.setItem('tcdLinkEmail', email);
-      shell(`<h3>Check your email</h3><p>We sent a sign-in link to <b>${esc(email)}</b>. Open it on this device to finish signing in.</p><button class="btn" id="back">Back</button>`);
-      $('#back').onclick = () => loginScreen();
-    } catch (e) { loginScreen('Could not send the link: ' + esc(e.code || e.message)); }
+      shell(`<h3>Check your email</h3><p>If <b>${esc(email)}</b> has access, a sign-in link is on its way from our team address. Open it on this device to finish signing in. It can take a minute, so check spam too.</p><button class="btn" id="back">Back</button>`);
+      $('#back').onclick = () => { linkBusy = false; loginScreen(); };
+    } catch (e) { linkBusy = false; loginScreen('Could not send the link: ' + esc(e.code || e.message)); }
   };
 }
 async function finishEmailLink() {
@@ -308,7 +319,7 @@ async function start(user) {
 }
 
 finishEmailLink().finally(() => {
-  onAuthStateChanged(auth, u => { if (u) start(u); else if (!started) loginScreen(); });
+  onAuthStateChanged(auth, u => { if (u && u.isAnonymous) return; if (u) start(u); else if (!started && !linkBusy) loginScreen(); });
 });
 
 

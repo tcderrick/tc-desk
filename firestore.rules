@@ -28,6 +28,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.txId == request.resource.data.txId
         && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.data.show.chat == true;
     }
+    // Sign-in link requests: a temporary guest asks the server to email a link (the server only sends to people who have access).
+    match /linkreq/{id} {
+      allow create: if request.auth != null && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && request.resource.data.uid == request.auth.uid && request.resource.data.email is string
+        && request.resource.data.email.size() < 200 && request.resource.data.keys().hasOnly(['uid', 'email', 'url', 'at']);
+    }
     match /portalseen/{email} {
       allow read, write: if signedIn() && email == em();
     }
