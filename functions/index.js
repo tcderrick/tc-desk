@@ -325,13 +325,14 @@ exports.linkSend = onDocumentCreated({ document: 'linkreq/{id}', memory: '256MiB
     if (!ok) ok = !(await db.collection('portal').where('email', '==', email).limit(1).get()).empty;
     if (!ok) return; // no access: send nothing, say nothing
     const rl = db.doc('srv/lr_' + Buffer.from(email).toString('base64url').slice(0, 120));
-    const last = ((await rl.get()).data() || {}).at || 0; if (Date.now() - last < 60e3) return;
+    const last = ((await rl.get()).data() || {}).at || 0; if (Date.now() - last < 15e3) return;
     await rl.set({ at: Date.now() });
     const origin = LINK_ORIGINS.find(o => String(r.url || '').startsWith(o)) || LINK_ORIGINS[0];
     const link = await admin.auth().generateSignInWithEmailLink(email, { url: origin + '/', handleCodeInApp: true });
     const cfg = await setting('sending');
     const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:520px"><p>Hello,</p><p>Here's your link to sign in to TC Desk as <b>${email}</b>:</p><p><a href="${link}" style="display:inline-block;background:#101828;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none">Sign in</a></p><p style="color:#475467;font-size:13px">Open it on the same device where you asked for it. The link works once and expires soon. If you didn't ask to sign in, you can ignore this email.</p></div>`;
-    await sendOne({ to: email, subject: 'Your TC Desk sign-in link', html, text: `Sign in to TC Desk as ${email}:\n${link}\n\nOpen it on the same device where you asked for it. If you didn't ask to sign in, ignore this email.`, noCc: true }, '', cfg);
+    const box = splitList(cfg.from)[0] || mailboxOf(cfg); const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' });
+    await sendOne({ from: 'TC Desk <' + addrOf(box) + '>', to: email, subject: 'Your TC Desk sign-in link (' + when + ')', html, text: `Sign in to TC Desk as ${email}:\n${link}\n\nOpen it on the same device where you asked for it. If you didn't ask to sign in, ignore this email.`, noCc: true }, '', cfg);
   } catch (e) { console.error('linkSend', e.message); }
   finally {
     try { await ev.data.ref.delete(); } catch (e) {}
