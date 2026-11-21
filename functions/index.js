@@ -323,7 +323,13 @@ exports.linkSend = onDocumentCreated({ document: 'linkreq/{id}', memory: '256MiB
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
     let ok = ADMINS.includes(email) || (await db.doc('logins/' + email).get()).exists;
     if (!ok) ok = !(await db.collection('portal').where('email', '==', email).limit(1).get()).empty;
-    if (!ok) return; // no access: send nothing, say nothing
+    if (!ok) {
+      // New person signing up: allow, but cap how many links go to unknown addresses each hour.
+      const g = db.doc('srv/linkglobal'); const hr = Math.floor(Date.now() / 3600e3);
+      const cur = (await g.get()).data() || {}; const n = cur.hr === hr ? (cur.n || 0) : 0;
+      if (n >= 40) return;
+      await g.set({ hr, n: n + 1 });
+    }
     const rl = db.doc('srv/lr_' + Buffer.from(email).toString('base64url').slice(0, 120));
     const last = ((await rl.get()).data() || {}).at || 0; if (Date.now() - last < 15e3) return;
     await rl.set({ at: Date.now() });

@@ -72,7 +72,7 @@ const downloadsShim = {
 const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><img src="/favicon.svg" width="30" height="30" alt="">TC Desk</div>${html}</div></div>`; };
 let linkBusy = false;
 function loginScreen(msg) {
-  shell(`<p class="mut">Sign in to continue.</p>
+  shell(`<p class="mut">Sign in to continue. New here? Use Google or your email below and your account is created automatically.</p>
   ${msg ? `<div class="lmsg">${msg}</div>` : ''}
   <button class="btn pri lbtn" id="gBtn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg> Sign in with Google</button>
   <div class="lor"><span>or get a sign-in link by email</span></div>
@@ -287,8 +287,13 @@ async function start(user) {
       let docs = [];
       try { const sn = await getDocs(query(collection(fs, 'portal'), where('email', '==', email))); docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); } catch (e) { console.warn('portal', e); }
       if (!docs.length) {
-        shell(`<h3>Nothing shared yet</h3><p>There aren't any files shared with <b>${esc(email)}</b>. If you're a client, use the email address your transaction coordinator has on file. If you're on the TC Desk team, ask Derrick to add this email under Templates → Team.</p><button class="btn" id="so">Use a different account</button>`);
-        $('#so').onclick = async () => { await signOut(auth); location.reload() };
+        // Signed in, but nothing is shared yet: let them finish a short sign-up so the team knows who they are.
+        let su = null; try { const d0 = await getDoc(doc(fs, 'signups', email)); su = d0.exists() ? d0.data() : null; } catch (e) {}
+        const form = () => shell(`<h3>Welcome to TC Desk</h3>${su ? `<p>Thanks, <b>${esc(su.name || email)}</b>. Your account is set up. Your files will show here as soon as your transaction coordinator shares them with <b>${esc(email)}</b>. This page updates by itself.</p>` : `<p class="mut">You're signed in as <b>${esc(email)}</b>. Nothing is shared with this email yet. Tell us who you are and your transaction coordinator will connect your files.</p>
+          <form id="suF" class="psu" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"><input id="suN" placeholder="Full name" required><select id="suR"><option value="agent">I'm an agent</option><option value="client">I'm a buyer or seller</option><option value="lender">I'm a lender</option><option value="escrow">I'm with escrow or title</option><option value="other">Other</option></select><input id="suC" placeholder="Brokerage or company (optional)"><input id="suP" placeholder="Phone (optional)"><input id="suA" placeholder="Property address you're working on (optional)"><button class="btn pri" type="submit">Create my account</button></form>`}<button class="btn" id="so" style="margin-top:10px">Sign out</button>`);
+        const wire = () => { $('#so').onclick = async () => { await signOut(auth); location.reload() }; const f = $('#suF'); if (f) f.onsubmit = async ev => { ev.preventDefault(); su = { email, name: $('#suN').value.trim().slice(0, 120), role: $('#suR').value, company: $('#suC').value.trim().slice(0, 120), phone: $('#suP').value.trim().slice(0, 40), note: $('#suA').value.trim().slice(0, 200), at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), su) } catch (e) { alert('Could not save. Please try again.'); su = null; return } form(); wire(); }; };
+        form(); wire();
+        onSnapshot(query(collection(fs, 'portal'), where('email', '==', email)), sn => { if (!sn.empty) location.reload(); }, () => {});
         return;
       }
       document.title = 'Your transaction';

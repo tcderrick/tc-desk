@@ -34,6 +34,13 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid && request.resource.data.email is string
         && request.resource.data.email.size() < 200 && request.resource.data.keys().hasOnly(['uid', 'email', 'url', 'at']);
     }
+    // Sign-ups: someone outside the team tells us who they are (their own record only).
+    match /signups/{email} {
+      allow read: if signedIn() && email == em();
+      allow create, update: if signedIn() && email == em() && request.resource.data.email == em()
+        && request.resource.data.keys().hasOnly(['email', 'name', 'role', 'company', 'phone', 'note', 'at'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 120;
+    }
     match /portalseen/{email} {
       allow read, write: if signedIn() && email == em();
     }
