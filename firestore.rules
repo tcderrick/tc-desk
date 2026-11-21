@@ -19,6 +19,15 @@ service cloud.firestore {
     match /portal/{id} {
       allow read: if signedIn() && resource.data.email == em();
     }
+    // Portal chat: each person reads only their own thread, and may write only on a file shared with them that has chat turned on.
+    match /pchat/{id} {
+      allow read: if signedIn() && resource.data.email == em();
+      allow create: if signedIn() && request.resource.data.email == em() && request.resource.data.from == 'client'
+        && request.resource.data.text is string && request.resource.data.text.size() < 4000
+        && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.email == em()
+        && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.txId == request.resource.data.txId
+        && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.data.show.chat == true;
+    }
     match /portalseen/{email} {
       allow read, write: if signedIn() && email == em();
     }

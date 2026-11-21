@@ -298,3 +298,18 @@ exports.fmMention = onDocumentWritten({ document: 'fmail/{id}', memory: '256MiB'
     res.responses.forEach((r, i) => { const c = r.error && r.error.code; if (c && /registration-token-not-registered|invalid-registration-token/.test(c)) to[i].ref.delete().catch(() => {}); });
   }
 });
+
+/* ---------- portal chat: tell the team when a client writes ---------- */
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+exports.pchatIn = onDocumentCreated({ document: 'pchat/{id}', memory: '256MiB' }, async ev => {
+  const m = ev.data && dec(ev.data.data()); if (!m || m.from !== 'client') return;
+  const snap = await db.collection('push').get(); const docs = snap.docs.map(d => ({ ref: d.ref, ...dec(d.data()) })).filter(x => x.token && x.on !== false);
+  if (!docs.length) return;
+  let addr = ''; const t = await db.doc('transactions/' + m.txId).get(); if (t.exists) addr = ((dec(t.data()).f) || {}).address || '';
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens: docs.map(x => x.token), data: { tx: m.txId },
+    webpush: { notification: { title: '💬 ' + (m.by || m.email) + (addr ? ' · ' + addr : ''), body: String(m.text || '').slice(0, 180), icon: '/icon-192.png', tag: 'pc-' + m.id },
+      fcmOptions: { link: `${APP_URL}/#v=detail&tx=${encodeURIComponent(m.txId)}&tab=pchat` } }
+  });
+  res.responses.forEach((r, i) => { const c = r.error && r.error.code; if (c && /registration-token-not-registered|invalid-registration-token/.test(c)) docs[i].ref.delete().catch(() => {}); });
+});
