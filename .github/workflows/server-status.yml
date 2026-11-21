@@ -1,0 +1,24 @@
+name: TC Desk server status
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/status-ping']
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/836507322815/locations/global/workloadIdentityPools/github/providers/tc-desk-repo
+          service_account: github-deploy@tc-desk.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: bash scripts/status.sh > /tmp/status.log 2>&1; cat /tmp/status.log
+      - if: always()
+        run: |
+          git config user.name "TC Desk Bot"; git config user.email tcdesk-bot@users.noreply.github.com
+          git fetch origin deploy-logs && git checkout -B deploy-logs origin/deploy-logs
+          cp /tmp/status.log status.log; git add status.log; git commit -qm "status" && git push origin deploy-logs
