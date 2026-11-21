@@ -273,3 +273,28 @@ exports.tick = onSchedule({ schedule: 'every 1 minutes', memory: '512MiB', timeo
   await status(p);
 });
 
+
+/* ---------- @mentions in a file email's team chat ---------- */
+exports.fmMention = onDocumentWritten({ document: 'fmail/{id}', memory: '256MiB' }, async ev => {
+  const before = ev.data.before && ev.data.before.exists ? dec(ev.data.before.data()) : {};
+  const after = ev.data.after && ev.data.after.exists ? dec(ev.data.after.data()) : null;
+  if (!after || after.del) return;
+  const had = new Set((before.notes || []).map(n => n.id));
+  const fresh = (after.notes || []).filter(n => !had.has(n.id) && (n.men || []).length && Date.now() - (n.at || 0) < 10 * 60e3);
+  if (!fresh.length) return;
+  const snap = await db.collection('push').get(); const docs = snap.docs.map(d => ({ ref: d.ref, ...dec(d.data()) })).filter(x => x.token && x.on !== false);
+  if (!docs.length) return;
+  let addr = '';
+  for (const col of ['transactions', 'archive']) { const t = await db.doc(col + '/' + after.tx).get(); if (t.exists) { addr = ((dec(t.data()).f) || {}).address || ''; break; } }
+  for (const n of fresh) {
+    const want = new Set(n.men.map(x => String(x).toLowerCase())); const by = String(n.by || '').toLowerCase();
+    const to = docs.filter(x => x.name && want.has(String(x.name).toLowerCase()) && String(x.name).toLowerCase() !== by);
+    if (!to.length) continue;
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens: to.map(x => x.token), data: { tx: after.tx, fm: after.id },
+      webpush: { notification: { title: (n.by || 'Someone') + ' mentioned you' + (addr ? ' · ' + addr : ''), body: String(n.text || '').slice(0, 180), icon: '/icon-192.png', tag: 'men-' + n.id },
+        fcmOptions: { link: `${APP_URL}/#v=detail&tx=${encodeURIComponent(after.tx)}&tab=fmail` } }
+    });
+    res.responses.forEach((r, i) => { const c = r.error && r.error.code; if (c && /registration-token-not-registered|invalid-registration-token/.test(c)) to[i].ref.delete().catch(() => {}); });
+  }
+});
