@@ -172,13 +172,16 @@ function boxRe(box) {
   const i = box.indexOf('@'); const q = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(q(box.slice(0, i)) + '\\+([a-z0-9-]+)@' + q(box.slice(i + 1)), 'gi');
 }
-async function importOne(box, id, codes) {
-  if ((await db.doc('fmail/' + id).get()).exists) return null;
+async function importOne(box, id) {
   const md = await gmail(box, `messages/${id}?format=metadata&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Bcc&metadataHeaders=Delivered-To&metadataHeaders=X-Original-To`);
   const hs = ((md.payload && md.payload.headers) || []).map(h => h.value).join(', ');
-  const re = boxRe(box); let hit = null, mm;
-  while ((mm = re.exec(hs))) { if (codes[mm[1].toLowerCase()]) { hit = codes[mm[1].toLowerCase()]; break; } }
+  const re = boxRe(box); const found = []; let mm;
+  while ((mm = re.exec(hs))) found.push(mm[1].toLowerCase());
+  if (!found.length) return null; // not for a deal: no database reads at all
+  let codes = await dealCodes(); if (!found.some(c => codes[c]) && Date.now() - codeCache.at > 30e3) { codeCache.at = 0; codes = await dealCodes(); }
+  const k = found.find(c => codes[c]); const hit = k && codes[k];
   if (!hit) return null;
+  if ((await db.doc('fmail/' + id).get()).exists) return null;
   const m = await gmail(box, `messages/${id}?format=full`);
   const hd = {}; ((m.payload && m.payload.headers) || []).forEach(h => hd[h.name.toLowerCase()] = h.value);
   const o = walk(m.payload, { html: '', text: '', atts: [] }); const atts = [];
@@ -228,12 +231,12 @@ async function mailCheck(cfg) {
   const box = mailboxOf(cfg); if (!box) return 0;
   const ref = db.doc('srv/gmail'); let st = (await ref.get()).data() || {};
   if (st.box !== box) st = { box };
-  const codes = await dealCodes(); const found = [];
+  const found = [];
   if (!st.historyId) {
     // First run: pick up anything from the last two days, then follow the mailbox history from here on.
     const prof = await gmail(box, 'profile'); const since = Math.floor((Date.now() - 2 * 864e5) / 1000);
     let pt = '', pages = 0; do { const r = await gmail(box, 'messages?maxResults=100&q=' + encodeURIComponent('after:' + since) + (pt ? '&pageToken=' + pt : ''));
-      for (const m of (r.messages || [])) { const x = await importOne(box, m.id, codes); if (x) found.push(x); } pt = r.nextPageToken || ''; pages++; } while (pt && pages < 5);
+      for (const m of (r.messages || [])) { const x = await importOne(box, m.id); if (x) found.push(x); } pt = r.nextPageToken || ''; pages++; } while (pt && pages < 5);
     st.historyId = prof.historyId;
   } else {
     let pt = '', ids = new Set(), last = st.historyId;
@@ -241,7 +244,7 @@ async function mailCheck(cfg) {
       do { const r = await gmail(box, `history?startHistoryId=${st.historyId}&historyTypes=messageAdded&maxResults=500` + (pt ? '&pageToken=' + pt : ''));
         (r.history || []).forEach(h => (h.messagesAdded || []).forEach(x => ids.add(x.message.id))); last = r.historyId || last; pt = r.nextPageToken || ''; } while (pt);
     } catch (e) { if (e.status === 404) { st.historyId = (await gmail(box, 'profile')).historyId; await ref.set(clean(st)); return 0; } throw e; }
-    for (const id of ids) { try { const x = await importOne(box, id, codes); if (x) found.push(x); } catch (e) { if (e.status !== 404) throw e; } }
+    for (const id of ids) { try { const x = await importOne(box, id); if (x) found.push(x); } catch (e) { if (e.status !== 404) throw e; } }
     st.historyId = last;
   }
   await ref.set(clean(st), { merge: true });
