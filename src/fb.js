@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot,
-  getDocs, getDoc, query, limit, writeBatch
+  getDocs, getDoc, query, limit, writeBatch, where
 } from 'firebase/firestore';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { getMessaging, getToken, deleteToken, onMessage, isSupported as msgSupported } from 'firebase/messaging';
@@ -272,8 +272,20 @@ async function start(user) {
     let ok = false;
     try { ok = (await getDoc(doc(fs, 'logins', email))).exists() } catch (e) { ok = false }
     if (!ok) {
-      shell(`<h3>No access yet</h3><p><b>${esc(email)}</b> isn't on the TC Desk team. Ask Derrick to add this email under Templates → Team.</p><button class="btn" id="so">Use a different account</button>`);
-      $('#so').onclick = async () => { await signOut(auth); location.reload() };
+      // Not on the team: show the client portal (only files shared with this email).
+      let docs = [];
+      try { const sn = await getDocs(query(collection(fs, 'portal'), where('email', '==', email))); docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); } catch (e) { console.warn('portal', e); }
+      if (!docs.length) {
+        shell(`<h3>Nothing shared yet</h3><p>There aren't any files shared with <b>${esc(email)}</b>. If you're a client, use the email address your transaction coordinator has on file. If you're on the TC Desk team, ask Derrick to add this email under Templates → Team.</p><button class="btn" id="so">Use a different account</button>`);
+        $('#so').onclick = async () => { await signOut(auth); location.reload() };
+        return;
+      }
+      document.title = 'Your transaction';
+      $('#app').innerHTML = ''; userChip(email);
+      const draw = () => window.tcdPortal ? window.tcdPortal($('#app'), docs, email) : ($('#app').textContent = 'Loading…');
+      draw();
+      onSnapshot(query(collection(fs, 'portal'), where('email', '==', email)), sn => { docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); draw(); }, () => {});
+      try { await setDoc(doc(fs, 'portalseen', email), { email, at: Date.now() }); } catch (e) {}
       return;
     }
   } else syncLogins();

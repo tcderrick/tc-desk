@@ -15,6 +15,13 @@ service cloud.firestore {
     match /data/users/{uid}/{docId} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
+    // Client portal: a person outside the team reads only the file views shared with their own email.
+    match /portal/{id} {
+      allow read: if signedIn() && resource.data.email == em();
+    }
+    match /portalseen/{email} {
+      allow read, write: if signedIn() && email == em();
+    }
     // Everything else: deals, contacts, templates, chat, settings. Team only.
     match /{col}/{docId} {
       allow read, write: if col != 'logins' && isTeam();
