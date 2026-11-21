@@ -284,6 +284,7 @@ async function start(user) {
       $('#app').innerHTML = ''; userChip(email);
       let msgs = [];
       const send = async (d, text) => { const id = Math.random().toString(36).slice(2) + Date.now().toString(36); const m = { id, txId: d.txId, email, pid: d.id, from: 'client', by: d.name || email, text: String(text).slice(0, 3900), at: Date.now() }; msgs = msgs.concat([m]); view && view.update(null, { msgs }); await setDoc(doc(fs, 'pchat', id), m); };
+      if (!window.tcdPortal) await new Promise(res => { const sc = document.createElement('script'); sc.src = '/portalview.js?v=' + (window.TCD_BUILD || ''); sc.onload = res; sc.onerror = res; document.body.appendChild(sc); });
       const view = window.tcdPortal ? window.tcdPortal($('#app'), docs, email, { msgs, send }) : null;
       if (!view) $('#app').textContent = 'Please reload the page.';
       onSnapshot(query(collection(fs, 'portal'), where('email', '==', email)), sn => { docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); view && view.update(docs); }, () => {});

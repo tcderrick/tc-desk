@@ -5,6 +5,7 @@ mkdirSync('public', { recursive: true });
 await build({ entryPoints: ['src/fb.js'], bundle: true, minify: true, format: 'esm', target: 'es2020', outfile: 'public/fb.js' });
 await build({ entryPoints: ['src/sw.js'], bundle: true, minify: true, format: 'iife', target: 'es2020', outfile: 'public/firebase-messaging-sw.js' });
 copyFileSync('src/app.js', 'public/app.js');
+copyFileSync('src/portalview.js', 'public/portalview.js');
 for (const f of readdirSync('src/static')) copyFileSync('src/static/' + f, 'public/' + f);
 const css = readFileSync('src/shell.css', 'utf8');
 const html = readFileSync('src/index.html', 'utf8')
