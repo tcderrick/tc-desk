@@ -44,9 +44,52 @@ service cloud.firestore {
     match /portalseen/{email} {
       allow read, write: if signedIn() && email == em();
     }
-    // Everything else: deals, contacts, templates, chat, settings. Team only.
+    // ---------- Other TCs' workspaces: each lives under ws/{id} and only its members can touch it ----------
+    function memOk(m, w) { return m.ws == w && m.role in ['owner', 'member']; }
+    function inWs(w) { return signedIn() && exists(/databases/$(database)/documents/wsmem/$(em())) && memOk(get(/databases/$(database)/documents/wsmem/$(em())).data, w); }
+    function inWsAfter(w) { return signedIn() && memOk(getAfter(/databases/$(database)/documents/wsmem/$(em())).data, w); }
+    function ownsAfter(w) { return getAfter(/databases/$(database)/documents/ws/$(w)).data.owner == em(); }
+    function owns(w) { return get(/databases/$(database)/documents/ws/$(w)).data.owner == em(); }
+    match /ws/{w} {
+      allow read: if inWs(w) || isAdmin();
+      // Anyone signed in can start a workspace, if they don't already belong to one.
+      allow create: if signedIn() && request.resource.data.owner == em()
+        && !exists(/databases/$(database)/documents/wsmem/$(em())) && !isTeam()
+        && request.resource.data.keys().hasOnly(['owner', 'name', 'at']);
+      allow update: if signedIn() && resource.data.owner == em() && request.resource.data.owner == em();
+    }
+    // Which workspace each person belongs to. The owner invites their team; each person accepts the invite themselves.
+    match /wsmem/{email} {
+      allow read: if signedIn() && (email == em() || owns(resource.data.ws) || isAdmin());
+      allow create: if signedIn() && request.resource.data.ws is string && ownsAfter(request.resource.data.ws)
+        && request.resource.data.keys().hasOnly(['ws', 'role', 'name', 'at'])
+        && (email == em() ? request.resource.data.role == 'owner' : request.resource.data.role == 'invited');
+      allow update: if signedIn() && ((owns(resource.data.ws) && request.resource.data.ws == resource.data.ws && request.resource.data.role == resource.data.role)
+        || (email == em() && resource.data.role == 'invited' && request.resource.data.role == 'member' && request.resource.data.ws == resource.data.ws));
+      allow delete: if signedIn() && ((owns(resource.data.ws) && email != em()) || (email == em() && resource.data.role != 'owner'));
+    }
+    match /ws/{w}/{rest=**} {
+      allow read: if inWs(w);
+      allow write: if inWsAfter(w);
+    }
+    // Portal and portal chat in any workspace: a client reads only what's shared with their own email.
+    match /{path=**}/portal/{id} {
+      allow read: if signedIn() && resource.data.email == em();
+    }
+    match /{path=**}/pchat/{id} {
+      allow read: if signedIn() && resource.data.email == em();
+    }
+    match /ws/{w}/pchat/{id} {
+      allow create: if signedIn() && request.resource.data.email == em() && request.resource.data.from == 'client'
+        && request.resource.data.text is string && request.resource.data.text.size() < 4000
+        && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.email == em()
+        && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.txId == request.resource.data.txId
+        && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.data.show.chat == true;
+    }
+
+    // Everything else: deals, contacts, templates, chat, settings. Your team only.
     match /{col}/{docId} {
-      allow read, write: if col != 'logins' && isTeam();
+      allow read, write: if !(col in ['logins', 'ws', 'wsmem']) && isTeam();
     }
   }
 }

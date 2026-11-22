@@ -1,0 +1,2 @@
+{ "name": "tcdesk-rules-test", "private": true, "type": "module",
+  "dependencies": { "@firebase/rules-unit-testing": "^4.0.1", "firebase": "^11.0.0" } }

@@ -1,0 +1,38 @@
+name: Rules test
+on:
+  push:
+    branches: [rules-test]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: cd tests && npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Run rules tests in the emulator
+        run: |
+          printf '{"firestore":{"rules":"firestore.rules"},"emulators":{"firestore":{"port":8089}}}' > /tmp/fb.json
+          cp /tmp/fb.json firebase.test.json
+          set +e
+          npx --yes firebase-tools@latest emulators:exec --config firebase.test.json --only firestore --project demo-tcdesk "cd tests && node rules.test.mjs" > rules.log 2>&1
+          echo "EXIT $?" >> rules.log
+          cat rules.log
+      - name: Save the log
+        run: |
+          git config user.name "TC Desk Bot"; git config user.email tcdesk-bot@users.noreply.github.com
+          cp rules.log /tmp/rules.log
+          git fetch origin rules-log || true
+          git checkout --orphan rules-log-tmp
+          git rm -rf --cached . >/dev/null
+          cp /tmp/rules.log rules.log
+          git add rules.log && git commit -m "rules log" -q
+          git push -f origin HEAD:rules-log

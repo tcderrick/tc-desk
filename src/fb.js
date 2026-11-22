@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot,
-  getDocs, getDoc, query, limit, writeBatch, where
+  getDocs, getDoc, query, limit, writeBatch, where, collectionGroup
 } from 'firebase/firestore';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { getMessaging, getToken, deleteToken, onMessage, isSupported as msgSupported } from 'firebase/messaging';
@@ -41,8 +41,11 @@ const hasNested = (v, inArr) => {
 const enc = d => hasNested(d, false) ? { __json: JSON.stringify(d) } : d;
 const dec = d => (d && typeof d.__json === 'string') ? JSON.parse(d.__json) : d;
 
+// Another TC's workspace keeps all its data under ws/{id}/. Derrick's own TC Desk stays at the top level.
+let WSP = '';
 const dbShim = {
   collection(path) {
+    path = WSP + path;
     return {
       doc: id => ({
         set: data => setDoc(doc(fs, path, id), enc(JSON.parse(JSON.stringify(data)))),
@@ -72,25 +75,32 @@ const downloadsShim = {
 const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><img src="/favicon.svg" width="30" height="30" alt="">TC Desk</div>${html}</div></div>`; };
 let linkBusy = false;
 const SU_ROLES = [['agent', "I'm an agent"], ['client', "I'm a buyer or seller"], ['lender', "I'm a lender"], ['escrow', "I'm with escrow or title"], ['other', 'Other']];
-let suMode = /[?&]signup\b/.test(location.search);
+let suMode = /[?&](signup|start)\b/.test(location.search);
+let suTC = /[?&]start\b/.test(location.search);
 function suPending() { try { return JSON.parse(localStorage.getItem('tcdSignup') || 'null') } catch (e) { return null } }
 function signupScreen(msg) {
   const p = suPending() || {};
+  const tc = p.role ? p.role === 'tc' : suTC;
   shell(`<div class="ltabs"><button type="button" id="tIn">Sign in</button><button type="button" class="on">Create account</button></div>
-  <p class="mut">Agents, clients, lenders and escrow can create a free account. Once your transaction coordinator connects your files, they show up here.</p>
+  <div class="lkind"><button type="button" data-k="tc" class="${tc ? 'on' : ''}"><b>I'm a transaction coordinator</b><span>Get my own TC Desk for my deals and team</span></button><button type="button" data-k="other" class="${tc ? '' : 'on'}"><b>I'm an agent, client, lender or escrow</b><span>See the files my TC shares with me</span></button></div>
+  <p class="mut">${tc ? 'Free while TC Desk is new. You start with an empty workspace that only you and the team you add can see.' : 'Once your transaction coordinator connects your files, they show up here.'}</p>
   ${msg ? `<div class="lmsg">${msg}</div>` : ''}
   <form id="suPre" class="lsu"><input id="sN" placeholder="Full name" required value="${esc(p.name || '')}" autocomplete="name">
-  <select id="sR">${SU_ROLES.map(([v, l]) => `<option value="${v}" ${p.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-  <input id="sC" placeholder="Brokerage or company (optional)" value="${esc(p.company || '')}" autocomplete="organization">
+  ${tc ? '<input type="hidden" id="sR" value="tc">' : `<select id="sR">${SU_ROLES.map(([v, l]) => `<option value="${v}" ${p.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`}
+  <input id="sC" placeholder="${tc ? 'Business name (optional)' : 'Brokerage or company (optional)'}" value="${esc(p.company || '')}" autocomplete="organization">
   <input id="sP" placeholder="Phone (optional)" value="${esc(p.phone || '')}" autocomplete="tel" type="tel">
-  <input id="sA" placeholder="Property address you're working on (optional)" value="${esc(p.note || '')}">
+  ${tc ? '<input type="hidden" id="sA" value="">' : `<input id="sA" placeholder="Property address you're working on (optional)" value="${esc(p.note || '')}">`}
   <div class="lor"><span>then confirm your email</span></div>
-  <button class="btn pri lbtn" type="button" id="sG">Create account with Google</button>
+  <button class="btn pri lbtn" type="button" id="sG">${tc ? 'Create my TC Desk with Google' : 'Create account with Google'}</button>
   <div class="lrow" style="margin-top:8px"><input id="sE" type="email" placeholder="you@example.com" autocomplete="email" value="${esc(p.email || '')}"><button class="btn" type="submit">Email me a link</button></div></form>`);
   const grab = () => { const name = $('#sN').value.trim(); if (!name) { $('#sN').focus(); $('#sN').reportValidity && $('#sN').reportValidity(); return null }
     const d = { name: name.slice(0, 120), role: $('#sR').value, company: $('#sC').value.trim().slice(0, 120), phone: $('#sP').value.trim().slice(0, 40), note: $('#sA').value.trim().slice(0, 200), email: $('#sE').value.trim().toLowerCase() };
     localStorage.setItem('tcdSignup', JSON.stringify(d)); return d };
   $('#tIn').onclick = () => { suMode = false; loginScreen() };
+  document.querySelectorAll('.lkind button').forEach(b => b.onclick = () => {
+    const keep = { name: $('#sN').value, company: $('#sC').value, phone: $('#sP').value, email: $('#sE').value, role: b.dataset.k === 'tc' ? 'tc' : '' };
+    suTC = b.dataset.k === 'tc'; localStorage.setItem('tcdSignup', JSON.stringify(keep)); signupScreen(msg);
+  });
   $('#sG').onclick = async () => { if (!grab()) return;
     try { await signInWithPopup(auth, new GoogleAuthProvider()) } catch (e) { if (e.code !== 'auth/popup-closed-by-user') signupScreen('Google sign-in did not finish: ' + esc(e.code || e.message)) } };
   $('#suPre').onsubmit = ev => { ev.preventDefault(); const d = grab(); if (!d) return; if (!d.email) { $('#sE').focus(); return } sendLink(d.email, true) };
@@ -179,10 +189,10 @@ window.tcdRestore = () => {
     let done = 0, fail = 0;
     for (let i = 0; i < jobs.length; i += 200) {
       const b = writeBatch(fs);
-      jobs.slice(i, i + 200).forEach(([col, id, d]) => b.set(doc(fs, col, id), enc(d)));
+      jobs.slice(i, i + 200).forEach(([col, id, d]) => b.set(doc(fs, WSP + col, id), enc(d)));
       try { await b.commit() } catch (e) {
         console.error(e);
-        for (const [col, id, d] of jobs.slice(i, i + 200)) { try { await setDoc(doc(fs, col, id), enc(d)) } catch (e2) { fail++; console.error(col, id, e2) } }
+        for (const [col, id, d] of jobs.slice(i, i + 200)) { try { await setDoc(doc(fs, WSP + col, id), enc(d)) } catch (e2) { fail++; console.error(col, id, e2) } }
       }
       done = Math.min(jobs.length, i + 200);
       ov.querySelector('#rBar').style.width = (done / jobs.length * 100) + '%';
@@ -314,9 +324,28 @@ async function start(user) {
     let ok = false;
     try { ok = (await getDoc(doc(fs, 'logins', email))).exists() } catch (e) { ok = false }
     if (!ok) {
-      // Not on the team: show the client portal (only files shared with this email).
+      // Another TC's workspace? (their own, one they joined, or an invite to answer)
+      let mem = null; try { const m0 = await getDoc(doc(fs, 'wsmem', email)); mem = m0.exists() ? m0.data() : null; } catch (e) { console.warn('wsmem', e); }
+      if (mem && (mem.role === 'owner' || mem.role === 'member')) return enterWs(user, email, mem);
+      const pre0 = suPending();
+      if (!mem && pre0 && pre0.role === 'tc' && pre0.name) {
+        localStorage.removeItem('tcdSignup');
+        try { return enterWs(user, email, await createWs(email, pre0)); }
+        catch (e) { console.error('create ws', e); shell(`<h3>Could not create your TC Desk</h3><p class="mut">${esc(e.code || e.message)}</p><button class="btn" id="so">Sign out</button>`); $('#so').onclick = async () => { await signOut(auth); location.reload() }; return; }
+      }
+      // Not on a team: show the client portal (only files shared with this email, from any TC's workspace).
       let docs = [];
-      try { const sn = await getDocs(query(collection(fs, 'portal'), where('email', '==', email))); docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); } catch (e) { console.warn('portal', e); }
+      const pdocs = sn => sn.docs.map(d => Object.assign({ id: d.id, _base: d.ref.parent.parent ? d.ref.parent.parent.path + '/' : '' }, dec(d.data())));
+      try { docs = pdocs(await getDocs(query(collectionGroup(fs, 'portal'), where('email', '==', email)))); }
+      catch (e) { console.warn('portal group', e); try { docs = pdocs(await getDocs(query(collection(fs, 'portal'), where('email', '==', email)))); } catch (e2) { console.warn('portal', e2); } }
+      if (mem && mem.role === 'invited') {
+        const join = await new Promise(res => {
+          shell(`<h3>You're invited</h3><p>You've been added to the team on <b>${esc(mem.name || 'a TC Desk workspace')}</b>. Join to work on their deals with them.</p><button class="btn pri lbtn" id="jY">Join the team</button>${docs.length ? '<button class="btn lbtn" id="jN">Not now, show my files</button>' : ''}<button class="btn" id="so" style="margin-top:10px">Sign out</button>`);
+          $('#jY').onclick = () => res(true); const n = $('#jN'); if (n) n.onclick = () => res(false);
+          $('#so').onclick = async () => { await signOut(auth); location.reload() };
+        });
+        if (join) { try { await setDoc(doc(fs, 'wsmem', email), Object.assign({}, mem, { role: 'member', at: Date.now() })); return enterWs(user, email, Object.assign({}, mem, { role: 'member' })); } catch (e) { alert('Could not join: ' + (e.code || e.message)); location.reload(); return; } }
+      }
       if (!docs.length) {
         // Signed in, but nothing is shared yet: let them finish a short sign-up so the team knows who they are.
         let su = null; try { const d0 = await getDoc(doc(fs, 'signups', email)); su = d0.exists() ? d0.data() : null; } catch (e) {}
@@ -325,36 +354,82 @@ async function start(user) {
         if (!su && pre && pre.name) { const d1 = { email, name: pre.name, role: pre.role || 'other', company: pre.company || '', phone: pre.phone || '', note: pre.note || '', at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), d1); su = d1; } catch (e) { console.warn('signup', e) } }
         localStorage.removeItem('tcdSignup');
         const form = () => shell(`<h3>Welcome to TC Desk</h3>${su ? `<p>Thanks, <b>${esc(su.name || email)}</b>. Your account is set up. Your files will show here as soon as your transaction coordinator shares them with <b>${esc(email)}</b>. This page updates by itself.</p>` : `<p class="mut">You're signed in as <b>${esc(email)}</b>. Nothing is shared with this email yet. Tell us who you are and your transaction coordinator will connect your files.</p>
-          <form id="suF" class="psu" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"><input id="suN" placeholder="Full name" required><select id="suR"><option value="agent">I'm an agent</option><option value="client">I'm a buyer or seller</option><option value="lender">I'm a lender</option><option value="escrow">I'm with escrow or title</option><option value="other">Other</option></select><input id="suC" placeholder="Brokerage or company (optional)"><input id="suP" placeholder="Phone (optional)"><input id="suA" placeholder="Property address you're working on (optional)"><button class="btn pri" type="submit">Create my account</button></form>`}<button class="btn" id="so" style="margin-top:10px">Sign out</button>`);
-        const wire = () => { $('#so').onclick = async () => { await signOut(auth); location.reload() }; const f = $('#suF'); if (f) f.onsubmit = async ev => { ev.preventDefault(); su = { email, name: $('#suN').value.trim().slice(0, 120), role: $('#suR').value, company: $('#suC').value.trim().slice(0, 120), phone: $('#suP').value.trim().slice(0, 40), note: $('#suA').value.trim().slice(0, 200), at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), su) } catch (e) { alert('Could not save. Please try again.'); su = null; return } form(); wire(); }; };
+          <form id="suF" class="psu" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"><input id="suN" placeholder="Full name" required><select id="suR"><option value="agent">I'm an agent</option><option value="client">I'm a buyer or seller</option><option value="lender">I'm a lender</option><option value="escrow">I'm with escrow or title</option><option value="other">Other</option></select><input id="suC" placeholder="Brokerage or company (optional)"><input id="suP" placeholder="Phone (optional)"><input id="suA" placeholder="Property address you're working on (optional)"><button class="btn pri" type="submit">Create my account</button></form>`}<div class="lor"><span>transaction coordinator?</span></div><button class="btn lbtn" id="mkWs">Start my own TC Desk</button><button class="btn" id="so" style="margin-top:10px">Sign out</button>`);
+        const wire = () => { $('#so').onclick = async () => { await signOut(auth); location.reload() };
+          $('#mkWs').onclick = async () => {
+            const nm = (su && su.name) || ($('#suN') && $('#suN').value.trim()) || prompt('Your full name');
+            if (!nm) return;
+            $('#mkWs').disabled = true; $('#mkWs').textContent = 'Setting up…';
+            try { enterWs(user, email, await createWs(email, { name: nm, company: (su && su.company) || '', phone: (su && su.phone) || '' })); }
+            catch (e) { alert('Could not create your TC Desk: ' + (e.code || e.message)); $('#mkWs').disabled = false; $('#mkWs').textContent = 'Start my own TC Desk'; }
+          }; const f = $('#suF'); if (f) f.onsubmit = async ev => { ev.preventDefault(); su = { email, name: $('#suN').value.trim().slice(0, 120), role: $('#suR').value, company: $('#suC').value.trim().slice(0, 120), phone: $('#suP').value.trim().slice(0, 40), note: $('#suA').value.trim().slice(0, 200), at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), su) } catch (e) { alert('Could not save. Please try again.'); su = null; return } form(); wire(); }; };
         form(); wire();
-        onSnapshot(query(collection(fs, 'portal'), where('email', '==', email)), sn => { if (!sn.empty) location.reload(); }, () => {});
+        onSnapshot(query(collectionGroup(fs, 'portal'), where('email', '==', email)), sn => { if (!sn.empty) location.reload(); }, () => {});
         return;
       }
       document.title = 'Your transaction';
       $('#app').innerHTML = ''; userChip(email);
       let msgs = [];
-      const send = async (d, text) => { const id = Math.random().toString(36).slice(2) + Date.now().toString(36); const m = { id, txId: d.txId, email, pid: d.id, from: 'client', by: d.name || email, text: String(text).slice(0, 3900), at: Date.now() }; msgs = msgs.concat([m]); view && view.update(null, { msgs }); await setDoc(doc(fs, 'pchat', id), m); };
+      const send = async (d, text) => { const id = Math.random().toString(36).slice(2) + Date.now().toString(36); const m = { id, txId: d.txId, email, pid: d.id, from: 'client', by: d.name || email, text: String(text).slice(0, 3900), at: Date.now() }; msgs = msgs.concat([m]); view && view.update(null, { msgs }); await setDoc(doc(fs, (d._base || '') + 'pchat', id), m); };
       if (!window.tcdPortal) await new Promise(res => { const sc = document.createElement('script'); sc.src = '/portalview.js?v=' + (window.TCD_BUILD || ''); sc.onload = res; sc.onerror = res; document.body.appendChild(sc); });
       const view = window.tcdPortal ? window.tcdPortal($('#app'), docs, email, { msgs, send }) : null;
       if (!view) $('#app').textContent = 'Please reload the page.';
-      onSnapshot(query(collection(fs, 'portal'), where('email', '==', email)), sn => { docs = sn.docs.map(d => Object.assign({ id: d.id }, dec(d.data()))); view && view.update(docs); }, () => {});
-      onSnapshot(query(collection(fs, 'pchat'), where('email', '==', email)), sn => { msgs = sn.docs.map(d => dec(d.data())); view && view.update(null, { msgs }); }, () => {});
+      onSnapshot(query(collectionGroup(fs, 'portal'), where('email', '==', email)), sn => { docs = pdocs(sn); view && view.update(docs); }, e => console.warn('portal live', e));
+      onSnapshot(query(collectionGroup(fs, 'pchat'), where('email', '==', email)), sn => { msgs = sn.docs.map(d => dec(d.data())); view && view.update(null, { msgs }); }, e => console.warn('pchat live', e));
       try { await setDoc(doc(fs, 'portalseen', email), { email, at: Date.now() }); } catch (e) {}
       return;
     }
   } else syncLogins();
-  window.TCD_HOSTED = { email, admin };
+  boot(user, email, admin);
+}
+
+/* ---------- other TCs' workspaces ---------- */
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+async function createWs(email, pre) {
+  const id = 'w' + rid();
+  const nm = String(pre.name || '').trim().slice(0, 120);
+  const name = (String(pre.company || '').trim() || (nm + "'s TC Desk")).slice(0, 120);
+  const b = writeBatch(fs);
+  b.set(doc(fs, 'ws', id), { owner: email, name, at: Date.now() });
+  b.set(doc(fs, 'wsmem', email), { ws: id, role: 'owner', name, at: Date.now() });
+  await b.commit();
+  const mid = rid();
+  const b2 = writeBatch(fs);
+  b2.set(doc(fs, `ws/${id}/members`, mid), { id: mid, name: nm, email, createdAt: Date.now() });
+  b2.set(doc(fs, `ws/${id}/settings`, 'mytc'), { id: 'mytc', name: nm, email, phone: String(pre.phone || '').slice(0, 40) });
+  await b2.commit();
+  return { ws: id, role: 'owner', name };
+}
+// The owner's Team list decides who may sign in to the workspace: new emails get an invite they accept.
+function syncWsMembers(id, wsName, owner) {
+  onSnapshot(collection(fs, `ws/${id}/members`), async s => {
+    const want = new Set(); s.docs.forEach(d => { const m = dec(d.data()); const e = String(m.email || '').trim().toLowerCase(); if (e && e !== owner) want.add(e) });
+    try {
+      const have = await getDocs(query(collection(fs, 'wsmem'), where('ws', '==', id)));
+      const had = new Set(have.docs.map(d => d.id));
+      for (const d of have.docs) if (d.id !== owner && !want.has(d.id)) { try { await deleteDoc(d.ref) } catch (e) { console.warn('wsmem del', e) } }
+      for (const e of want) if (!had.has(e)) { try { await setDoc(doc(fs, 'wsmem', e), { ws: id, role: 'invited', name: wsName, at: Date.now() }) } catch (er) { console.warn('wsmem add (already on another team?)', e, er) } }
+    } catch (e) { console.error('ws members', e); }
+  });
+}
+async function enterWs(user, email, mem) {
+  WSP = `ws/${mem.ws}/`;
+  let w = {}; try { const d = await getDoc(doc(fs, 'ws', mem.ws)); w = d.exists() ? d.data() : {}; } catch (e) {}
+  const isOwner = mem.role === 'owner';
+  window.TCD_WS = { id: mem.ws, name: w.name || mem.name || 'TC Desk', owner: w.owner || '', isOwner };
+  if (isOwner) syncWsMembers(mem.ws, window.TCD_WS.name, email);
+  boot(user, email, false);
+}
+
+function boot(user, email, admin) {
+  window.TCD_HOSTED = { email, admin, ws: !!window.TCD_WS };
   window.claude = { use: async n => n === 'db' ? dbShim : n === 'downloads' ? downloadsShim : n === 'user' ? { id: async () => user.uid } : n === 'sample' ? sampleShim : null };
   window.TCD_AI = 'Gemini';
   userChip(email);
   // first run: offer to restore when the database is empty
-  if (admin) {
-    try {
-      const s = await getDocs(query(collection(fs, 'transactions'), limit(1)));
-      if (s.empty) setTimeout(() => { if (confirm('Your hosted TC Desk is empty. Restore from a TC Desk backup file now?')) window.tcdRestore() }, 1500);
-    } catch (e) {}
-  }
+  if (admin) getDocs(query(collection(fs, 'transactions'), limit(1))).then(s => {
+    if (s.empty) setTimeout(() => { if (confirm('Your hosted TC Desk is empty. Restore from a TC Desk backup file now?')) window.tcdRestore() }, 1500);
+  }).catch(() => {});
   const sc = document.createElement('script'); sc.src = '/app.js?v=' + (window.TCD_BUILD || ''); document.body.appendChild(sc);
 }
 

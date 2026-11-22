@@ -22,4 +22,4 @@ jobs:
           workload_identity_provider: projects/836507322815/locations/global/workloadIdentityPools/github/providers/tc-desk-repo
           service_account: github-deploy@tc-desk.iam.gserviceaccount.com
       - name: Deploy to Firebase
-        run: npx --yes firebase-tools@latest deploy --only hosting,firestore:rules --project tc-desk --non-interactive
+        run: npx --yes firebase-tools@latest deploy --only hosting,firestore:rules,firestore:indexes --project tc-desk --non-interactive
