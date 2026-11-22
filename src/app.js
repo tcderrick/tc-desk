@@ -378,8 +378,8 @@ function cdDeadCell(tx,c){const dl=cDead(tx,c);const ext=c.date&&dl&&c.date!==dl
 function datesTab(tx){const rows=tx.cont.filter(c=>c.k!=='coe');return `<div class="card cdcard">${tx.f.acceptance?'':'<p class="warn" style="margin-top:0">Enter the acceptance date on the Attributes tab to calculate these deadlines.</p>'}
  <div class="cdwrap"><table class="list cdt2"><colgroup><col style="width:19%"><col style="width:15%"><col style="width:17%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:11%"><col style="width:4%"></colgroup>
  <thead><tr><th>Milestone</th><th>Counted as</th><th>Deadline</th><th title="A signed extension or a new ETA. Changes the deadline used in emails and the summary.">Extended to / ETA</th><th title="Doesn't change the deadline. Moves the reminder and the overdue alert while you wait.">Follow up on</th><th>Status</th><th>Completed on</th><th></th></tr></thead><tbody>
- ${rows.map(c=>{const st=cdStatus(c);const w=st==='open'?cwatch(tx,c):'';const dd=w?daysTo(w):null;const tone=st!=='open'?'cd-ok':dd==null?'':dd<0?'cd-late':dd===0?'cd-today':'';return `<tr id="cr-${c.id}" class="cdr ${st!=='open'?'cdoff':''} ${tone}">
-  <td><input class="cdlbl" data-c="${c.id}" data-cf="label" value="${esc(c.label)}"><div class="cdcode">{{<input data-c="${c.id}" data-cf="k" value="${esc(c.k||'')}" placeholder="${esc(slug(c.label))}" title="Email code">_date}}</div></td>
+ ${rows.map(c=>{const st=cdStatus(c);const w=st==='open'?cwatch(tx,c):'';const dd=w?daysTo(w):null;const tone=st!=='open'?'cd-ok':dd==null?'':dd<0?'cd-late':dd===0?'cd-today':'';return `<tr id="cr-${c.id}" class="cdr ${st!=='open'?'cdoff':''} ${tone} ${(S.cdM||{})[c.id]?'mopen':''}">
+  <td><button class="cdmore" data-act="cd-mtog" data-id="${c.id}" title="Show details">${(S.cdM||{})[c.id]?'▾':'▸'}</button><input class="cdlbl" data-c="${c.id}" data-cf="label" value="${esc(c.label)}"><div class="cdcode">{{<input data-c="${c.id}" data-cf="k" value="${esc(c.k||'')}" placeholder="${esc(slug(c.label))}" title="Email code">_date}}</div></td>
   <td data-l="Counted as"><div class="cdrule"><input class="cddays" data-c="${c.id}" data-cf="days" inputmode="numeric" value="${esc(c.from==='coe'?Math.abs(+c.days||0)||'':c.days)}" placeholder="–"><select data-c="${c.id}" data-cf="rule"><option value="acc" ${cdRule(c)==='acc'?'selected':''}>after acc.</option><option value="accb" ${cdRule(c)==='accb'?'selected':''}>biz days after</option><option value="coe" ${cdRule(c)==='coe'?'selected':''}>before COE</option></select></div></td>
   <td id="cd-${c.id}" data-l="Deadline">${cdDeadCell(tx,c)}</td>
   <td data-l="Extended to / ETA"><input type="date" data-c="${c.id}" data-cf="date" value="${esc(c.date||'')}" title="Leave blank to use the contract deadline"></td>
@@ -1264,6 +1264,7 @@ app.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if
  case 'pt-pick':S.ptChat=b.dataset.k;renderPortalChat();break;
  case 'pt-send2':{const t0=getTx();if(t0)ptSend(t0).then(()=>{if(S.view==='chat')renderPortalChat()});break}
  case 'pt-open':e.preventDefault();flushAll();S.txId=b.dataset.id;S.view='detail';S.tab='pchat';render();break;
+ case 'cd-mtog':{S.cdM=S.cdM||{};const id=b.dataset.id;S.cdM[id]=!S.cdM[id];const tr=$('#cr-'+id);if(tr){tr.classList.toggle('mopen',!!S.cdM[id]);b.textContent=S.cdM[id]?'▾':'▸'}break}
  case 'pt-sel':S.ptSel=b.dataset.e;if(S.view==='chat')renderChat();else renderTab();break;
  case 'pt-send':ptSend(tx);break;
  case 'p-view':pViewModal(tx);break;
