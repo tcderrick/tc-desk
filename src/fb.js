@@ -71,34 +71,65 @@ const downloadsShim = {
 /* ---------- login screen ---------- */
 const shell = html => { $('#app').innerHTML = `<div class="login"><div class="lbox"><div class="brand big"><img src="/favicon.svg" width="30" height="30" alt="">TC Desk</div>${html}</div></div>`; };
 let linkBusy = false;
+const SU_ROLES = [['agent', "I'm an agent"], ['client', "I'm a buyer or seller"], ['lender', "I'm a lender"], ['escrow', "I'm with escrow or title"], ['other', 'Other']];
+let suMode = /[?&]signup\b/.test(location.search);
+function suPending() { try { return JSON.parse(localStorage.getItem('tcdSignup') || 'null') } catch (e) { return null } }
+function signupScreen(msg) {
+  const p = suPending() || {};
+  shell(`<div class="ltabs"><button type="button" id="tIn">Sign in</button><button type="button" class="on">Create account</button></div>
+  <p class="mut">Agents, clients, lenders and escrow can create a free account. Once your transaction coordinator connects your files, they show up here.</p>
+  ${msg ? `<div class="lmsg">${msg}</div>` : ''}
+  <form id="suPre" class="lsu"><input id="sN" placeholder="Full name" required value="${esc(p.name || '')}" autocomplete="name">
+  <select id="sR">${SU_ROLES.map(([v, l]) => `<option value="${v}" ${p.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+  <input id="sC" placeholder="Brokerage or company (optional)" value="${esc(p.company || '')}" autocomplete="organization">
+  <input id="sP" placeholder="Phone (optional)" value="${esc(p.phone || '')}" autocomplete="tel" type="tel">
+  <input id="sA" placeholder="Property address you're working on (optional)" value="${esc(p.note || '')}">
+  <div class="lor"><span>then confirm your email</span></div>
+  <button class="btn pri lbtn" type="button" id="sG">Create account with Google</button>
+  <div class="lrow" style="margin-top:8px"><input id="sE" type="email" placeholder="you@example.com" autocomplete="email" value="${esc(p.email || '')}"><button class="btn" type="submit">Email me a link</button></div></form>`);
+  const grab = () => { const name = $('#sN').value.trim(); if (!name) { $('#sN').focus(); $('#sN').reportValidity && $('#sN').reportValidity(); return null }
+    const d = { name: name.slice(0, 120), role: $('#sR').value, company: $('#sC').value.trim().slice(0, 120), phone: $('#sP').value.trim().slice(0, 40), note: $('#sA').value.trim().slice(0, 200), email: $('#sE').value.trim().toLowerCase() };
+    localStorage.setItem('tcdSignup', JSON.stringify(d)); return d };
+  $('#tIn').onclick = () => { suMode = false; loginScreen() };
+  $('#sG').onclick = async () => { if (!grab()) return;
+    try { await signInWithPopup(auth, new GoogleAuthProvider()) } catch (e) { if (e.code !== 'auth/popup-closed-by-user') signupScreen('Google sign-in did not finish: ' + esc(e.code || e.message)) } };
+  $('#suPre').onsubmit = ev => { ev.preventDefault(); const d = grab(); if (!d) return; if (!d.email) { $('#sE').focus(); return } sendLink(d.email, true) };
+}
+async function sendLink(email, isNew) {
+  try {
+    linkBusy = true;
+    try {
+      const a = await signInAnonymously(auth);
+      const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      await setDoc(doc(fs, 'linkreq', id), { uid: a.user.uid, email, url: location.origin + '/', at: Date.now() });
+      await signOut(auth);
+    } catch (e1) {
+      console.warn('server link', e1); try { if (auth.currentUser && auth.currentUser.isAnonymous) await signOut(auth); } catch (e2) {}
+      await sendSignInLinkToEmail(auth, email, { url: location.origin + '/', handleCodeInApp: true });
+    }
+    localStorage.setItem('tcdLinkEmail', email);
+    shell(`<h3>Check your email</h3><p>${isNew ? `We sent a link to <b>${esc(email)}</b> to finish creating your account.` : `If <b>${esc(email)}</b> has access, a sign-in link is on its way from our team address.`} Open it on this device. It can take a minute, so check spam too.</p><button class="btn" id="back">Back</button>`);
+    $('#back').onclick = () => { linkBusy = false; isNew ? signupScreen() : loginScreen(); };
+  } catch (e) { linkBusy = false; (isNew ? signupScreen : loginScreen)('Could not send the link: ' + esc(e.code || e.message)); }
+}
 function loginScreen(msg) {
-  shell(`<p class="mut">Sign in to continue. New here? Use Google or your email below and your account is created automatically.</p>
+  if (suMode) return signupScreen(msg);
+  shell(`<div class="ltabs"><button type="button" class="on">Sign in</button><button type="button" id="tUp">Create account</button></div>
+  <p class="mut">Sign in to continue.</p>
   ${msg ? `<div class="lmsg">${msg}</div>` : ''}
   <button class="btn pri lbtn" id="gBtn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg> Sign in with Google</button>
   <div class="lor"><span>or get a sign-in link by email</span></div>
   <form id="elForm" class="lrow"><input id="elEmail" type="email" placeholder="you@example.com" required autocomplete="email"><button class="btn" type="submit">Email me a link</button></form>`);
   $('#gBtn').onclick = async () => {
+    localStorage.removeItem('tcdSignup');
     try { await signInWithPopup(auth, new GoogleAuthProvider()); }
     catch (e) { if (e.code !== 'auth/popup-closed-by-user') loginScreen('Google sign-in did not finish: ' + esc(e.code || e.message)); }
   };
-  $('#elForm').onsubmit = async ev => {
-    ev.preventDefault(); const email = $('#elEmail').value.trim().toLowerCase();
-    try {
-      linkBusy = true;
-      try {
-        // Ask TC Desk's server to email the link from the team address.
-        const a = await signInAnonymously(auth);
-        const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        await setDoc(doc(fs, 'linkreq', id), { uid: a.user.uid, email, url: location.origin + '/', at: Date.now() });
-        await signOut(auth);
-      } catch (e1) {
-        console.warn('server link', e1); try { if (auth.currentUser && auth.currentUser.isAnonymous) await signOut(auth); } catch (e2) {}
-        await sendSignInLinkToEmail(auth, email, { url: location.origin + '/', handleCodeInApp: true });
-      }
-      localStorage.setItem('tcdLinkEmail', email);
-      shell(`<h3>Check your email</h3><p>If <b>${esc(email)}</b> has access, a sign-in link is on its way from our team address. Open it on this device to finish signing in. It can take a minute, so check spam too.</p><button class="btn" id="back">Back</button>`);
-      $('#back').onclick = () => { linkBusy = false; loginScreen(); };
-    } catch (e) { linkBusy = false; loginScreen('Could not send the link: ' + esc(e.code || e.message)); }
+  $('#tUp').onclick = () => { suMode = true; signupScreen() };
+  $('#elForm').onsubmit = ev => {
+    ev.preventDefault(); localStorage.removeItem('tcdSignup');
+    // Ask TC Desk's server to email the link from the team address.
+    sendLink($('#elEmail').value.trim().toLowerCase(), false);
   };
 }
 async function finishEmailLink() {
@@ -289,6 +320,10 @@ async function start(user) {
       if (!docs.length) {
         // Signed in, but nothing is shared yet: let them finish a short sign-up so the team knows who they are.
         let su = null; try { const d0 = await getDoc(doc(fs, 'signups', email)); su = d0.exists() ? d0.data() : null; } catch (e) {}
+        // Filled in on the Create account screen before confirming the email: save it now.
+        const pre = suPending();
+        if (!su && pre && pre.name) { const d1 = { email, name: pre.name, role: pre.role || 'other', company: pre.company || '', phone: pre.phone || '', note: pre.note || '', at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), d1); su = d1; } catch (e) { console.warn('signup', e) } }
+        localStorage.removeItem('tcdSignup');
         const form = () => shell(`<h3>Welcome to TC Desk</h3>${su ? `<p>Thanks, <b>${esc(su.name || email)}</b>. Your account is set up. Your files will show here as soon as your transaction coordinator shares them with <b>${esc(email)}</b>. This page updates by itself.</p>` : `<p class="mut">You're signed in as <b>${esc(email)}</b>. Nothing is shared with this email yet. Tell us who you are and your transaction coordinator will connect your files.</p>
           <form id="suF" class="psu" style="display:flex;flex-direction:column;gap:8px;margin-top:10px"><input id="suN" placeholder="Full name" required><select id="suR"><option value="agent">I'm an agent</option><option value="client">I'm a buyer or seller</option><option value="lender">I'm a lender</option><option value="escrow">I'm with escrow or title</option><option value="other">Other</option></select><input id="suC" placeholder="Brokerage or company (optional)"><input id="suP" placeholder="Phone (optional)"><input id="suA" placeholder="Property address you're working on (optional)"><button class="btn pri" type="submit">Create my account</button></form>`}<button class="btn" id="so" style="margin-top:10px">Sign out</button>`);
         const wire = () => { $('#so').onclick = async () => { await signOut(auth); location.reload() }; const f = $('#suF'); if (f) f.onsubmit = async ev => { ev.preventDefault(); su = { email, name: $('#suN').value.trim().slice(0, 120), role: $('#suR').value, company: $('#suC').value.trim().slice(0, 120), phone: $('#suP').value.trim().slice(0, 40), note: $('#suA').value.trim().slice(0, 200), at: Date.now() }; try { await setDoc(doc(fs, 'signups', email), su) } catch (e) { alert('Could not save. Please try again.'); su = null; return } form(); wire(); }; };
