@@ -769,7 +769,8 @@ html.dark .pside-t{border-top-color:#2a3038}
  .row.between{flex-wrap:wrap}
  .btn{min-height:34px}.btn.sm{min-height:30px}
  /* Deal bar: extra actions behind More */
- .dmorebtn{display:inline-flex}.dact{display:none!important}.dshow .dact{display:inline-flex!important}
+ .dmorebtn{display:inline-flex}.dact{display:none!important}.dshow .dact,.phbar:has(.dmorebtn.on) .dact{display:inline-flex!important}
+ .phbar>.grow{display:none}.phbar>.btn{flex:1 1 calc(50% - 3px);justify-content:center;margin:0!important}.phbar>.btn.dact{flex-basis:calc(50% - 3px)}.phbar>.btn.danger.dact{flex-basis:100%}.dmorebtn.on{background:#101828;color:#fff;border-color:#101828}
  .phbar,.dbar{gap:6px!important}
  /* Tasks toolbar */
  .ckhint{display:none}.ckoptbtn{display:inline-flex;margin-left:auto}.ckoptbtn.on{background:#101828;color:#fff}
