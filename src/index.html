@@ -743,7 +743,7 @@ html.dark .pside-t{border-top-color:#2a3038}
 .psu input,.psu select,.psu textarea{width:100%;box-sizing:border-box}
 
 /* ===== Phone layout ===== */
-.cdmore{display:none}
+.cdmore{display:none}.dmorebtn,.ckoptbtn,.embk{display:none}.ckopts{display:contents}
 @media (max-width:760px){
  input,select,textarea{font-size:15px}
  header.top{flex-wrap:wrap;row-gap:2px;padding:6px 10px!important}
@@ -768,6 +768,19 @@ html.dark .pside-t{border-top-color:#2a3038}
  .pchips .pchip{max-width:100%;flex-wrap:wrap}
  .row.between{flex-wrap:wrap}
  .btn{min-height:34px}.btn.sm{min-height:30px}
+ /* Deal bar: extra actions behind More */
+ .dmorebtn{display:inline-flex}.dact{display:none!important}.dshow .dact{display:inline-flex!important}
+ .phbar,.dbar{gap:6px!important}
+ /* Tasks toolbar */
+ .ckhint{display:none}.ckoptbtn{display:inline-flex;margin-left:auto}.ckoptbtn.on{background:#101828;color:#fff}
+ .ckopts,.ckoptsr{display:none!important}.ckopts.open,.ckoptsr.open{display:flex!important;flex-wrap:wrap;gap:6px;margin-top:6px}
+ #ckTpl{flex:1;min-width:0}
+ /* Emails: list first, tap to open, back to list */
+ .emsplit{grid-template-columns:1fr!important}
+ .emsplit.emm-list>.card:not(.side){display:none}
+ .emsplit.emm-edit>.side{display:none}
+ .embk{display:inline-block;margin:0 0 8px;font-size:14px}
+ .emrow{grid-template-columns:1fr!important;gap:2px!important}.emrow>label,.emrow>span:first-child{font-size:12px}
  /* Critical dates: compact cards, tap ▸ for details */
  .cdcard{padding:8px!important}
  .cdwrap{overflow:visible!important}
