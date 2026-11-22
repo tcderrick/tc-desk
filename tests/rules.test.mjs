@@ -50,6 +50,8 @@ await ok('alice lists her team', getDocs(query(collection(a, 'wsmem'), where('ws
 await no('carol cannot list alice team', getDocs(query(collection(c, 'wsmem'), where('ws', '==', 'w1'))));
 await no('alice cannot remove herself as owner', deleteDoc(doc(a, 'wsmem', A)));
 await no('alice cannot hand ownership to carol', updateDoc(doc(a, 'ws', 'w1'), { owner: C }));
+await no('member cannot rewrite the workspace record', setDoc(doc(as('m2@example.com'), 'ws', 'w1'), { owner: 'm2@example.com', name: 'x', at: 1 }));
+await ok('alice renames her workspace', updateDoc(doc(a, 'ws', 'w1'), { name: 'Alice TC' }));
 // Portal in a workspace
 await ok('alice shares a file with dave', setDoc(doc(a, 'ws/w1/portal', 'p1'), { email: D, txId: 'd1', data: { show: { chat: true } } }));
 await ok('alice shares a no-chat file with dave', setDoc(doc(a, 'ws/w1/portal', 'p2'), { email: D, txId: 'd9', data: { show: { chat: false } } }));

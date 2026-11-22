@@ -68,7 +68,8 @@ service cloud.firestore {
         || (email == em() && resource.data.role == 'invited' && request.resource.data.role == 'member' && request.resource.data.ws == resource.data.ws));
       allow delete: if signedIn() && ((owns(resource.data.ws) && email != em()) || (email == em() && resource.data.role != 'owner'));
     }
-    match /ws/{w}/{rest=**} {
+    // (at least one level below ws/{w}, so the workspace record itself only follows the rules above)
+    match /ws/{w}/{col}/{rest=**} {
       allow read: if inWs(w);
       allow write: if inWsAfter(w);
     }
