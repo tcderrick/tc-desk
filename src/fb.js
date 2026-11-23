@@ -144,11 +144,21 @@ function loginScreen(msg) {
 }
 async function finishEmailLink() {
   if (!isSignInWithEmailLink(auth, location.href)) return;
-  let email = localStorage.getItem('tcdLinkEmail');
+  // Links in chat emails carry the address (le=), so the client doesn't have to type it.
+  const le = (new URLSearchParams(location.search).get('le') || '').trim().toLowerCase();
+  let email = le || localStorage.getItem('tcdLinkEmail');
   if (!email) email = (prompt('Confirm your email to finish signing in') || '').trim().toLowerCase();
   if (!email) return;
+  try { await auth.authStateReady(); } catch (e) {}
+  if (auth.currentUser && !auth.currentUser.isAnonymous && (auth.currentUser.email || '').toLowerCase() === email) { history.replaceState(null, '', '/'); return; }
   try { await signInWithEmailLink(auth, email, location.href); localStorage.removeItem('tcdLinkEmail'); history.replaceState(null, '', '/'); }
-  catch (e) { loginScreen('That sign-in link did not work. It may have expired. Send a new one.'); }
+  catch (e) {
+    history.replaceState(null, '', '/');
+    if (auth.currentUser && !auth.currentUser.isAnonymous) return;
+    linkBusy = true; // keep this message on screen
+    loginScreen(le ? 'That link has expired. Tap "Email me a link" for a fresh one, or just reply to the email.' : 'That sign-in link did not work. It may have expired. Send a new one.');
+    const f = document.getElementById('elEmail'); if (f && email) f.value = email;
+  }
 }
 
 /* ---------- user chip (sign out) ---------- */

@@ -74,13 +74,14 @@ const b64 = s => Buffer.from(String(s), 'utf8').toString('base64');
 const wrap76 = s => s.replace(/.{1,76}/g, m => m + '\r\n');
 const hdr = s => /[^\x20-\x7e]/.test(s) ? '=?UTF-8?B?' + b64(s) + '?=' : s;
 const addrHdr = list => splitList(list).map(a => { const m = /^(.*)<([^>]+)>$/.exec(a); return m && m[1].trim() ? hdr(m[1].trim().replace(/^"|"$/g, '')) + ' <' + m[2].trim() + '>' : a; }).join(', ');
-function buildMime({ from, to, cc, bcc, subject, html, text, files }) {
+function buildMime({ from, to, cc, bcc, subject, html, text, files, replyTo }) {
   const imgs = []; let n = 0;
   html = String(html || '').replace(/src=(["'])data:(image\/[a-z+.-]+);base64,([^"']+)\1/gi, (all, q, type, data) => { const id = 'img' + (++n) + '.' + Date.now().toString(36) + '@tcdesk'; imgs.push({ id, type, data }); return `src=${q}cid:${id}${q}`; });
   const R = 'rel_' + Date.now().toString(36), A = 'alt_' + Math.random().toString(36).slice(2), M = 'mix_' + Math.random().toString(36).slice(2);
   const att = files || []; const L = [];
   if (from) L.push('From: ' + addrHdr(from));
   L.push('To: ' + addrHdr(to)); if (cc) L.push('Cc: ' + addrHdr(cc)); if (bcc) L.push('Bcc: ' + addrHdr(bcc));
+  if (replyTo) L.push('Reply-To: ' + addrHdr(replyTo));
   L.push('Subject: ' + hdr(subject || ''), 'MIME-Version: 1.0');
   if (att.length) L.push(`Content-Type: multipart/mixed; boundary="${M}"`, '', `--${M}`);
   L.push(`Content-Type: multipart/related; boundary="${R}"`, '', `--${R}`, `Content-Type: multipart/alternative; boundary="${A}"`, '', `--${A}`,
@@ -101,7 +102,7 @@ async function sendOne(m, byEmail, cfg) {
   let cc = m.cc || ''; const ccTo = String(cfg.ccTo || '').trim();
   if (!m.noCc && cfg.cc && ccTo && byEmail !== ccTo.toLowerCase() && !(String(m.to) + ',' + cc + ',' + String(m.bcc || '')).toLowerCase().includes(ccTo.toLowerCase())) cc = cc ? cc + ', ' + ccTo : ccTo;
   if (!splitList(m.to).length && !splitList(cc).length && !splitList(m.bcc).length) throw new Error('Add at least one recipient');
-  const mime = buildMime({ from, to: m.to || '', cc, bcc: m.bcc || '', subject: m.subject || '', html: m.html || '', text: m.text || '', files: m.files || [] });
+  const mime = buildMime({ from, to: m.to || '', cc, bcc: m.bcc || '', subject: m.subject || '', html: m.html || '', text: m.text || '', files: m.files || [], replyTo: m.replyTo || '' });
   const r = await gmail(box, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media', { method: 'POST', body: mime, headers: { 'Content-Type': 'message/rfc822' } });
   return { id: r.id, from, cc };
 }
@@ -178,6 +179,15 @@ async function importOne(box, id) {
   const re = boxRe(box); const found = []; let mm;
   while ((mm = re.exec(hs))) found.push(mm[1].toLowerCase());
   if (!found.length) return null; // not for a deal: no database reads at all
+  // A reply to a client-chat email: tc+<code>-chat-<token>@...
+  const ck = found.find(c => c.includes('-chat-'));
+  let chatNote = '';
+  if (ck) {
+    const r = await chatReply(box, id, ck.slice(ck.lastIndexOf('-chat-') + 6));
+    if (r === 'done' || r === 'dup') return null;
+    if (r && r.atts) chatNote = r.atts; // posted to chat; attachments still go to File email below
+    for (let i = 0; i < found.length; i++) if (found[i].includes('-chat-')) found[i] = found[i].slice(0, found[i].lastIndexOf('-chat-'));
+  }
   let codes = await dealCodes(); if (!found.some(c => codes[c]) && Date.now() - codeCache.at > 30e3) { codeCache.at = 0; codes = await dealCodes(); }
   const k = found.find(c => codes[c]); const hit = k && codes[k];
   if (!hit) return null;
@@ -302,7 +312,9 @@ exports.fmMention = onDocumentWritten({ document: 'fmail/{id}', memory: '256MiB'
 /* ---------- portal chat: tell the team when a client writes ---------- */
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 exports.pchatIn = onDocumentCreated({ document: 'pchat/{id}', memory: '256MiB' }, async ev => {
-  const m = ev.data && dec(ev.data.data()); if (!m || m.from !== 'client') return;
+  const m = ev.data && dec(ev.data.data()); if (!m) return;
+  if (m.from === 'team') { if (m.mail && !m.mailed) { try { await chatMail(m, ev.data.ref); } catch (e) { console.error('chatMail', e.message); await ev.data.ref.set({ mailErr: e.message }, { merge: true }); } } return; }
+  if (m.from !== 'client') return;
   const snap = await db.collection('push').get(); const docs = snap.docs.map(d => ({ ref: d.ref, ...dec(d.data()) })).filter(x => x.token && x.on !== false);
   if (!docs.length) return;
   let addr = ''; const t = await db.doc('transactions/' + m.txId).get(); if (t.exists) addr = ((dec(t.data()).f) || {}).address || '';
@@ -345,3 +357,67 @@ exports.linkSend = onDocumentCreated({ document: 'linkreq/{id}', memory: '256MiB
     try { if (r.uid) await admin.auth().deleteUser(r.uid); } catch (e) {}
   }
 });
+
+
+/* ---------- client chat by email ----------
+   A team message with "email them" ticked goes out from the team address with:
+   - a one-tap link that signs the client straight into their portal, and
+   - Reply-To set to the file's own address plus a chat token (tc+<code>-chat-<token>@...),
+     so a reply lands back in that client's chat on the file. */
+const rnd = n => require('crypto').randomBytes(n).toString('base64url').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, n);
+async function txFor(id) { for (const col of ['transactions', 'archive']) { const s = await db.doc(col + '/' + id).get(); if (s.exists) return dec(s.data()); } return null; }
+async function chatToken(pid, txId, email) {
+  const ref = db.doc('pmail/' + pid); const cur = (await ref.get()).data();
+  if (cur && cur.tok) return cur.tok;
+  const tok = rnd(12); await db.doc('pmtok/' + tok).set({ pid, txId, email, at: Date.now() }); await ref.set({ tok, txId, email, at: Date.now() });
+  return tok;
+}
+const escH = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+async function chatMail(m, ref) {
+  const cfg = await setting('sending'); const box = mailboxOf(cfg); if (!box) throw new Error('No team mailbox is set');
+  const p = await db.doc('portal/' + m.pid).get(); const pd = p.exists ? dec(p.data()) : null;
+  const tx = await txFor(m.txId); const f = (tx && tx.f) || {};
+  const addr = f.address || 'your file';
+  const first = String((pd && pd.name) || '').split(/[\s&]+/)[0] || 'there';
+  const chatOn = !!(pd && pd.data && pd.data.show && pd.data.show.chat);
+  let replyTo = '';
+  if (chatOn && f.file_code) { const tok = await chatToken(m.pid, m.txId, m.email); const i = box.indexOf('@'); replyTo = `TC Desk <${box.slice(0, i)}+${String(f.file_code).toLowerCase()}-chat-${tok}${box.slice(i)}>`; }
+  let link = APP_URL + '/';
+  try { link = await admin.auth().generateSignInWithEmailLink(m.email, { url: APP_URL + '/?le=' + encodeURIComponent(m.email) + '&chat=' + encodeURIComponent(m.txId), handleCodeInApp: true }); } catch (e) { console.warn('chat link', e.message); }
+  const how = replyTo ? 'Just reply to this email to answer, or open the chat:' : 'Open the chat to reply:';
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:560px"><p>Hi ${escH(first)},</p><p>You have a new message about <b>${escH(addr)}</b> from ${escH(m.by || 'your TC team')}:</p><blockquote style="border-left:3px solid #d0d5dd;margin:0 0 14px;padding:4px 12px;color:#344054">${escH(m.text).replace(/\n/g, '<br>')}</blockquote><p>${how}</p><p><a href="${link}" style="display:inline-block;background:#101828;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none">Open chat</a></p><p style="color:#667085;font-size:12.5px">The button signs you in as ${escH(m.email)}. After the first time, this device stays signed in at app.derrick.club.</p></div>`;
+  const text = `Hi ${first},\n\nYou have a new message about ${addr} from ${m.by || 'your TC team'}:\n\n${m.text}\n\n${replyTo ? 'Just reply to this email to answer, or open the chat:' : 'Open the chat to reply:'}\n${link}`;
+  const from = 'TC Desk <' + addrOf(splitList(cfg.from)[0] || box) + '>';
+  await sendOne({ from, to: m.email, subject: 'Message about ' + addr, html, text, replyTo, noCc: true }, '', cfg);
+  await ref.set({ mailed: Date.now() }, { merge: true });
+}
+// Keep only what the client typed: drop quoted history, signatures and "Sent from my iPhone".
+function replyText(text, html) {
+  let s = String(text || '');
+  if (!s.trim() && html) s = String(html).replace(/<div[^>]*class="?gmail_quote[\s\S]*$/i, '').replace(/<blockquote[\s\S]*$/i, '')
+    .replace(/<(br|\/p|\/div|\/li)[^>]*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+  s = s.replace(/\r/g, '');
+  const cuts = [/^On [^\n]*(\n[^\n]*)?wrote:\s*$/m, /^-{2,}\s*Original Message/mi, /^_{5,}/m, /^From: [^\n]+$/m, /^Sent from my /m, /^Get Outlook for/m, /^-- ?$/m, /^\S[^\n]{0,80}<[^>\s]+@[^>\s]+>\s*wrote:\s*$/m];
+  let end = s.length; cuts.forEach(re => { const m = re.exec(s); if (m && m.index < end) end = m.index; });
+  s = s.slice(0, end).split('\n').filter(l => !/^\s*>/.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return s.slice(0, 3900);
+}
+async function chatReply(box, id, tok) {
+  const t = await db.doc('pmtok/' + tok.replace(/[^a-z0-9]/g, '')).get(); if (!t.exists) return null;
+  const k = t.data();
+  if ((await db.doc('pchat/em_' + id).get()).exists) return 'dup';
+  const m = await gmail(box, `messages/${id}?format=full`);
+  const hd = {}; ((m.payload && m.payload.headers) || []).forEach(h => hd[h.name.toLowerCase()] = h.value);
+  // Only the client the chat belongs to can post into it. Anyone else's mail goes to File email as usual.
+  if (addrOf(hd.from) !== String(k.email).toLowerCase()) return null;
+  const p = await db.doc('portal/' + k.pid).get(); const pd = p.exists ? dec(p.data()) : null;
+  if (!pd || !(pd.data && pd.data.show && pd.data.show.chat)) return null;
+  const o = walk(m.payload, { html: '', text: '', atts: [] });
+  let body = replyText(o.text, o.html);
+  const n = o.atts.length;
+  if (!body && !n) return 'done';
+  if (n) body = (body ? body + '\n\n' : '') + `📎 Sent ${n} attachment${n > 1 ? 's' : ''} (saved in File email)`;
+  const name = (/^\s*"?([^"<]*?)"?\s*</.exec(hd.from || '') || [])[1] || pd.name || k.email;
+  await db.doc('pchat/em_' + id).set({ id: 'em_' + id, txId: k.txId, email: k.email, pid: k.pid, from: 'client', by: name.trim(), text: body, at: +m.internalDate || Date.now(), viaEmail: true });
+  return n ? { atts: n } : 'done';
+}
