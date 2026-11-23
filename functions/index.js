@@ -102,6 +102,13 @@ async function sendOne(m, byEmail, cfg) {
   let cc = m.cc || ''; const ccTo = String(cfg.ccTo || '').trim();
   if (!m.noCc && cfg.cc && ccTo && byEmail !== ccTo.toLowerCase() && !(String(m.to) + ',' + cc + ',' + String(m.bcc || '')).toLowerCase().includes(ccTo.toLowerCase())) cc = cc ? cc + ', ' + ccTo : ccTo;
   if (!splitList(m.to).length && !splitList(cc).length && !splitList(m.bcc).length) throw new Error('Add at least one recipient');
+  // Portal invites carry %%SIGNIN_LINK%%: swap in a one-tap sign-in link for the person it's addressed to.
+  if (/%%SIGNIN_LINK%%/.test(String(m.html || '') + String(m.text || ''))) {
+    const who = addrOf(splitList(m.to)[0]); let link = APP_URL + '/';
+    try { if (who) link = await admin.auth().generateSignInWithEmailLink(who, { url: APP_URL + '/?le=' + encodeURIComponent(who), handleCodeInApp: true }); } catch (e) { console.warn('invite link', e.message); }
+    const r = s => String(s || '').split('%%SIGNIN_LINK%%').join(link);
+    m = Object.assign({}, m, { html: r(m.html), text: r(m.text) });
+  }
   const mime = buildMime({ from, to: m.to || '', cc, bcc: m.bcc || '', subject: m.subject || '', html: m.html || '', text: m.text || '', files: m.files || [], replyTo: m.replyTo || '' });
   const r = await gmail(box, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=media', { method: 'POST', body: mime, headers: { 'Content-Type': 'message/rfc822' } });
   return { id: r.id, from, cc };
