@@ -315,7 +315,14 @@ const sampleShim = {
         const setup = /genai config not found|genai-config-not-found|API has not been used|disabled|PERMISSION_DENIED|403|api-not-enabled/i.test(msg);
         if (!setup && /not found|404|is not supported|unsupported model/i.test(msg)) continue;
         if (setup) { const er = new Error('Gemini isn\'t turned on for this project yet. In Firebase, open AI Logic and click Get started with the Gemini Developer API.'); er.code = 'setup'; throw er }
-        if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) { const er = new Error('Gemini\'s free limit is used up for now. Try again in a minute or two.'); er.code = 'rate_limited'; throw er }
+        if (/429|quota|RESOURCE_EXHAUSTED/i.test(msg)) {
+          // Say which limit it is, so it's clear whether to wait or fix billing.
+          let t;
+          if (/prepay|credits? (are |is )?depleted|balance/i.test(msg)) t = 'Gemini\'s prepaid credit is used up. Add credit in Google AI Studio (aistudio.google.com), Billing, for the tc-desk project.';
+          else if (/free.?tier|FreeTier/i.test(msg)) t = 'Gemini is still on its free tier for this project. Set up billing for tc-desk in Google AI Studio (aistudio.google.com), Billing, then try again.';
+          else t = 'Gemini hit a usage limit. Try again in a minute or two.';
+          const er = new Error(t + ' (Google said: ' + msg.replace(/\s+/g, ' ').slice(0, 220) + ')'); er.code = 'rate_limited'; throw er
+        }
         throw e;
       }
     }
