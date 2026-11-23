@@ -2086,12 +2086,16 @@ function fmMentionToast(){const n=fmMyName().toLowerCase();if(!n)return;S._fmMen
  if(S._fmMenSeen===null){S._fmMenSeen=new Set(all.map(a=>a[0]));return}const nw=all.filter(a=>!S._fmMenSeen.has(a[0]));nw.forEach(a=>S._fmMenSeen.add(a[0]));
  if(nw.length){const [,m,x]=nw[nw.length-1];const t=getTx(x.tx);toast(`💬 ${m.by} mentioned you on ${t?(t.f.address||'a deal'):'a deal'}: ${String(m.text).slice(0,80)}`)}}
 
-async function fmShowBody(){const v=document.getElementById('fmView');if(!v)return;const id=v.dataset.id;S._fmBody=S._fmBody||{};let b=S._fmBody[id];
+async function fmShowBody(){const v=document.getElementById('fmView');if(!v)return;const id=v.dataset.id;if(!v.querySelector('iframe'))v.style.minHeight=Math.round(Math.max(420,window.innerHeight*0.7))+'px';S._fmBody=S._fmBody||{};let b=S._fmBody[id];
  if(!b){try{b=await db.collection('fmbody').doc(id).get()}catch(e){b=null}b=b||{html:'',text:''};S._fmBody[id]=b}
  const v2=document.getElementById('fmView');if(!v2||v2.dataset.id!==id)return;
  const html=b.html?b.html:'<pre style="white-space:pre-wrap;font:14px/1.5 Arial,sans-serif;margin:0">'+esc(b.text||'(no text)')+'</pre>';
  const fr=document.createElement('iframe');fr.className='fmfr';fr.setAttribute('sandbox','allow-same-origin allow-popups allow-popups-to-escape-sandbox');fr.srcdoc='<base target="_blank"><style>body{font:14px/1.5 Arial,sans-serif;color:#101828;margin:12px;word-wrap:break-word}img{max-width:100%;height:auto}</style>'+html;
- v2.innerHTML='';v2.appendChild(fr);fr.onload=()=>{try{fr.style.height=Math.min(Math.max(fr.contentDocument.documentElement.scrollHeight+10,120),5000)+'px'}catch(e){fr.style.height='600px'}}}
+ fr.style.height=Math.round(Math.max(420,window.innerHeight*0.7))+'px';v2.innerHTML='';v2.appendChild(fr);v2.style.minHeight='';
+ // Size it as soon as the text is in, without waiting for pictures; grow again as pictures arrive.
+ const fit=()=>{try{const d=fr.contentDocument;if(!d||!d.documentElement)return;fr.style.height=Math.min(Math.max(d.documentElement.scrollHeight+10,120),5000)+'px'}catch(e){}};
+ let n=0;const tk=setInterval(()=>{n++;try{const d=fr.contentDocument;if(d&&d.readyState!=='loading'&&d.body&&d.body.childNodes.length){fit();d.querySelectorAll('img').forEach(im=>{if(!im.complete)im.addEventListener('load',fit,{once:true})});clearInterval(tk)}}catch(e){clearInterval(tk)}if(n>100)clearInterval(tk)},30);
+ fr.onload=()=>{fit();setTimeout(fit,400)}}
 async function fmGetAtt(rec,i){const a=rec.atts[i];let d='';for(let c=0;c<a.n;c++){const x=await db.collection('fmatt').doc(rec.id+'_'+i+'_'+c).get();if(!x||!x.d)throw new Error('This attachment is missing');d+=x.d}const bin=atob(d);const u=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)u[j]=bin.charCodeAt(j);return new Blob([u],{type:a.type||'application/octet-stream'})}
 const fmMe=()=>myLogin()||String(prefs().me||'me').toLowerCase();
 const fmUnread=x=>!x.done&&!(x.seen||{})[fmMe()];
