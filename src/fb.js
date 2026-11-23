@@ -106,8 +106,16 @@ function signupScreen(msg) {
   $('#suPre').onsubmit = ev => { ev.preventDefault(); const d = grab(); if (!d) return; if (!d.email) { $('#sE').focus(); return } sendLink(d.email, true) };
 }
 async function sendLink(email, isNew) {
+  // Show "Check your email" right away; the request finishes in the background.
+  linkBusy = true;
+  localStorage.setItem('tcdLinkEmail', email);
+  const shown = () => {
+    shell(`<h3>Check your email</h3><p>${isNew ? `We're sending a link to <b>${esc(email)}</b> to finish creating your account.` : `If <b>${esc(email)}</b> has access, a sign-in link is on its way from our team address.`} Open it on this device. It can take a minute, so check spam too.</p><p class="mut small" id="lnkSt">Sending…</p><button class="btn" id="back">Back</button>`);
+    $('#back').onclick = () => { linkBusy = false; isNew ? signupScreen() : loginScreen(); };
+  };
+  shown();
+  const st = t => { const el = document.getElementById('lnkSt'); if (el) el.textContent = t; };
   try {
-    linkBusy = true;
     try {
       const a = await signInAnonymously(auth);
       const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -117,9 +125,7 @@ async function sendLink(email, isNew) {
       console.warn('server link', e1); try { if (auth.currentUser && auth.currentUser.isAnonymous) await signOut(auth); } catch (e2) {}
       await sendSignInLinkToEmail(auth, email, { url: location.origin + '/', handleCodeInApp: true });
     }
-    localStorage.setItem('tcdLinkEmail', email);
-    shell(`<h3>Check your email</h3><p>${isNew ? `We sent a link to <b>${esc(email)}</b> to finish creating your account.` : `If <b>${esc(email)}</b> has access, a sign-in link is on its way from our team address.`} Open it on this device. It can take a minute, so check spam too.</p><button class="btn" id="back">Back</button>`);
-    $('#back').onclick = () => { linkBusy = false; isNew ? signupScreen() : loginScreen(); };
+    st('Sent. Check your inbox.');
   } catch (e) { linkBusy = false; (isNew ? signupScreen : loginScreen)('Could not send the link: ' + esc(e.code || e.message)); }
 }
 function loginScreen(msg) {
