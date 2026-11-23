@@ -48,7 +48,7 @@ await no('alice cannot steal carol from her workspace', setDoc(doc(a, 'wsmem', C
 await no('alice cannot delete carol membership', deleteDoc(doc(a, 'wsmem', C)));
 await ok('alice lists her team', getDocs(query(collection(a, 'wsmem'), where('ws', '==', 'w1'))));
 await no('carol cannot list alice team', getDocs(query(collection(c, 'wsmem'), where('ws', '==', 'w1'))));
-await no('alice cannot remove herself as owner', deleteDoc(doc(a, 'wsmem', A)));
+await no('carol cannot close alice workspace', deleteDoc(doc(c, 'ws', 'w1')));
 await no('alice cannot hand ownership to carol', updateDoc(doc(a, 'ws', 'w1'), { owner: C }));
 await no('member cannot rewrite the workspace record', setDoc(doc(as('m2@example.com'), 'ws', 'w1'), { owner: 'm2@example.com', name: 'x', at: 1 }));
 await ok('alice renames her workspace', updateDoc(doc(a, 'ws', 'w1'), { name: 'Alice TC' }));
@@ -65,6 +65,9 @@ await ok('dave reads his chat', getDocs(query(collectionGroup(d, 'pchat'), where
 await no('dave cannot read deals', getDoc(doc(d, 'ws/w1/transactions', 'd1')));
 await ok('alice reads dave chat in her workspace', getDocs(collection(a, 'ws/w1/pchat')));
 await ok('bob leaves the team', deleteDoc(doc(b, 'wsmem', B)));
+await no('bob cannot close alice workspace', deleteDoc(doc(b, 'ws', 'w1')));
+await ok('carol closes her own workspace', (async () => { await deleteDoc(doc(c, 'wsmem', C)); await deleteDoc(doc(c, 'ws', 'w2')); })());
+await no('carol can no longer read her old workspace', getDoc(doc(c, 'ws/w2/transactions', 'x')));
 await no('bob cannot read deals after leaving', getDoc(doc(b, 'ws/w1/transactions', 'd1')));
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();

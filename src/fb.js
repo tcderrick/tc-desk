@@ -376,6 +376,7 @@ async function start(user) {
           $('#mkWs').onclick = async () => {
             const nm = (su && su.name) || ($('#suN') && $('#suN').value.trim()) || prompt('Your full name');
             if (!nm) return;
+            if (!confirm('This creates a separate, empty TC Desk for a transaction coordinator to run their own deals.\n\nAgents, buyers, sellers and lenders should NOT do this. Your files appear here once your TC shares them with you.\n\nCreate your own TC Desk?')) return;
             $('#mkWs').disabled = true; $('#mkWs').textContent = 'Setting up…';
             try { enterWs(user, email, await createWs(email, { name: nm, company: (su && su.company) || '', phone: (su && su.phone) || '' })); }
             catch (e) { alert('Could not create your TC Desk: ' + (e.code || e.message)); $('#mkWs').disabled = false; $('#mkWs').textContent = 'Start my own TC Desk'; }
@@ -417,6 +418,22 @@ async function createWs(email, pre) {
   await b2.commit();
   return { ws: id, role: 'owner', name };
 }
+// Close a workspace (its owner) or remove one (Derrick). Members are let go first, then the workspace record.
+window.tcdWs = {
+  async list() { const s = await getDocs(collection(fs, 'ws')); return s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (b.at || 0) - (a.at || 0)); },
+  async remove(id) {
+    const m = await getDocs(query(collection(fs, 'wsmem'), where('ws', '==', id)));
+    for (const d of m.docs) await deleteDoc(d.ref);
+    await deleteDoc(doc(fs, 'ws', id));
+  },
+  async close() {
+    const w = window.TCD_WS; const me = (window.TCD_HOSTED || {}).email; if (!w || !w.isOwner || !me) return;
+    const m = await getDocs(query(collection(fs, 'wsmem'), where('ws', '==', w.id)));
+    for (const d of m.docs) if (d.id !== me) await deleteDoc(d.ref);
+    await deleteDoc(doc(fs, 'ws', w.id)); await deleteDoc(doc(fs, 'wsmem', me));
+    location.reload();
+  }
+};
 // The owner's Team list decides who may sign in to the workspace: new emails get an invite they accept.
 function syncWsMembers(id, wsName, owner) {
   onSnapshot(collection(fs, `ws/${id}/members`), async s => {

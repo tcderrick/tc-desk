@@ -57,16 +57,18 @@ service cloud.firestore {
         && !exists(/databases/$(database)/documents/wsmem/$(em())) && !isTeam()
         && request.resource.data.keys().hasOnly(['owner', 'name', 'at']);
       allow update: if signedIn() && resource.data.owner == em() && request.resource.data.owner == em();
+      // The owner can close their workspace; Derrick (admin) can remove any.
+      allow delete: if signedIn() && (resource.data.owner == em() || isAdmin());
     }
     // Which workspace each person belongs to. The owner invites their team; each person accepts the invite themselves.
     match /wsmem/{email} {
-      allow read: if signedIn() && (email == em() || owns(resource.data.ws) || isAdmin());
+      allow read: if signedIn() && (email == em() || isAdmin() || owns(resource.data.ws));
       allow create: if signedIn() && request.resource.data.ws is string && ownsAfter(request.resource.data.ws)
         && request.resource.data.keys().hasOnly(['ws', 'role', 'name', 'at'])
         && (email == em() ? request.resource.data.role == 'owner' : request.resource.data.role == 'invited');
       allow update: if signedIn() && ((owns(resource.data.ws) && request.resource.data.ws == resource.data.ws && request.resource.data.role == resource.data.role)
         || (email == em() && resource.data.role == 'invited' && request.resource.data.role == 'member' && request.resource.data.ws == resource.data.ws));
-      allow delete: if signedIn() && ((owns(resource.data.ws) && email != em()) || (email == em() && resource.data.role != 'owner'));
+      allow delete: if signedIn() && ((owns(resource.data.ws) && email != em()) || email == em() || isAdmin());
     }
     // (at least one level below ws/{w}, so the workspace record itself only follows the rules above)
     match /ws/{w}/{col}/{rest=**} {
