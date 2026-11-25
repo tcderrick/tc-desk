@@ -299,26 +299,36 @@ function ptParts(d = new Date()) {
   const g = k => (s.find(x => x.type === k) || {}).value; return { day: `${g('year')}-${g('month')}-${g('day')}`, hour: +g('hour') % 24, wd: g('weekday') };
 }
 async function sdDaily(cfg) {
-  const now = ptParts(); const morning = !['Sat', 'Sun'].includes(now.wd) && now.hour >= 8 && now.hour < 11;
+  const now = ptParts(); const wdN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(now.wd);
+  const dayDiff = (a, b) => Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / 864e5);
   const snap = await db.collection('sdq').where('pending', '>', 0).get();
+  const due = x => {
+    const days = Array.isArray(x.days) && x.days.length ? x.days : [1, 2, 3, 4, 5]; const hour = +x.hour || 8;
+    if (!x.auto || !days.includes(wdN) || now.hour < hour || now.hour >= hour + 3 || x.last === now.day) return false;
+    if (x.last && dayDiff(now.day, x.last) < (+x.every || 1)) return false; return true;
+  };
+  const ready = x => (x.items || []).filter(it => x.force || !it.sent || dayDiff(now.day, it.sent) >= (+x.delay || 0));
   for (const d of snap.docs) {
-    const q0 = dec(d.data());
-    if (!q0.force && !(morning && q0.auto && q0.last !== now.day)) continue;
+    const q0 = dec(d.data()); if (!q0.items) continue; // old single-list records
+    if (!q0.force && !(due(q0) && ready(q0).length)) continue;
     const q = await db.runTransaction(async tr => {
       const s = await tr.get(d.ref); if (!s.exists) return null; const x = dec(s.data());
-      if (!(x.pending > 0) || !(x.force || (morning && x.auto && x.last !== now.day))) return null;
+      if (!(x.pending > 0) || !(x.force || (due(x) && ready(x).length))) return null;
       tr.update(d.ref, { last: now.day, lastAt: Date.now(), force: false, err: '' }); return x;
     });
     if (!q) continue;
     try {
+      const its = ready(q); if (!its.length) continue;
       const files = []; let total = 0;
-      for (const f of (q.files || [])) {
+      for (const it of its) for (const f of (it.files || [])) {
         let data = ''; for (let c = 0; c < (f.n || 0); c++) { const x = await db.doc(`sdatt/${f.key}_${c}`).get(); if (x.exists) data += dec(x.data()).d || ''; }
-        if (!data) continue; total += data.length * 0.75; if (total > 20 * 1024 * 1024) break;
-        files.push({ name: f.name, type: f.type, data });
+        if (!data) continue; total += data.length * 0.75; if (total > 20 * 1024 * 1024) break; files.push({ name: f.name, type: f.type, data });
       }
+      const esc2 = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = (q.head || '') + '<ul style="margin-top:4px">' + its.map(it => `<li style="margin:4px 0"><b>${esc2(it.name)}</b> <span style="color:#667085">(${esc2(q.word || 'sent')} ${esc2(it.sentS || it.sent || '')})</span></li>`).join('') + '</ul>' + (q.tail || '');
+      const text = `${q.hi || 'Hello,'}\n\n${q.msg || ''}\n\n${q.addr || ''}:\n${its.map(it => '- ' + it.name).join('\n')}\n\nThank you`;
       if (!splitList(q.to).length) throw new Error('No one to send it to');
-      await sendOne({ to: q.to, cc: q.cc || '', subject: q.subject, html: q.html, text: q.text, files }, '', cfg);
+      await sendOne({ to: q.to, cc: q.cc || '', subject: q.subject, html, text, files }, '', cfg);
     } catch (e) { console.error('sent docs', d.id, e.message); await d.ref.update({ err: e.message, last: q.last || '' }).catch(() => {}); }
   }
 }

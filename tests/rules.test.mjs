@@ -60,6 +60,7 @@ await no('dave cannot list everyone portal files', getDocs(query(collectionGroup
 await no('carol cannot read dave portal file', getDoc(doc(c, 'ws/w1/portal', 'p1')));
 await ok('dave chats on his file', setDoc(doc(d, 'ws/w1/pchat', 'm1'), { email: D, from: 'client', text: 'hi', pid: 'p1', txId: 'd1', at: 1 }));
 await no('dave cannot chat where chat is off', setDoc(doc(d, 'ws/w1/pchat', 'm2'), { email: D, from: 'client', text: 'hi', pid: 'p2', txId: 'd9', at: 1 }));
+await no('dave cannot add extra fields to a chat message', setDoc(doc(d, 'ws/w1/pchat', 'm9'), { email: D, from: 'client', text: 'hi', pid: 'p1', txId: 'd1', at: 1, viaEmail: true, mailed: 1 }));
 await no('dave cannot pose as the team', setDoc(doc(d, 'ws/w1/pchat', 'm3'), { email: D, from: 'team', text: 'hi', pid: 'p1', txId: 'd1', at: 1 }));
 await ok('dave reads his chat', getDocs(query(collectionGroup(d, 'pchat'), where('email', '==', D))));
 await no('dave cannot read deals', getDoc(doc(d, 'ws/w1/transactions', 'd1')));

@@ -23,6 +23,8 @@ service cloud.firestore {
     match /pchat/{id} {
       allow read: if signedIn() && resource.data.email == em();
       allow create: if signedIn() && request.resource.data.email == em() && request.resource.data.from == 'client'
+        && request.resource.data.keys().hasOnly(['id', 'txId', 'email', 'pid', 'from', 'by', 'text', 'at'])
+        && (!('by' in request.resource.data) || (request.resource.data.by is string && request.resource.data.by.size() <= 160))
         && request.resource.data.text is string && request.resource.data.text.size() < 4000
         && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.email == em()
         && get(/databases/$(database)/documents/portal/$(request.resource.data.pid)).data.txId == request.resource.data.txId
@@ -84,6 +86,8 @@ service cloud.firestore {
     }
     match /ws/{w}/pchat/{id} {
       allow create: if signedIn() && request.resource.data.email == em() && request.resource.data.from == 'client'
+        && request.resource.data.keys().hasOnly(['id', 'txId', 'email', 'pid', 'from', 'by', 'text', 'at'])
+        && (!('by' in request.resource.data) || (request.resource.data.by is string && request.resource.data.by.size() <= 160))
         && request.resource.data.text is string && request.resource.data.text.size() < 4000
         && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.email == em()
         && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.txId == request.resource.data.txId
