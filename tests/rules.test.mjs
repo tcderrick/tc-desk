@@ -31,6 +31,12 @@ await no('bob cannot make himself owner of alice workspace', setDoc(doc(b, 'wsme
 await no('alice cannot read the main TC Desk', getDoc(doc(a, 'transactions', 'main1')));
 await no('alice cannot write the main TC Desk', setDoc(doc(a, 'contacts', 'z'), { x: 1 }));
 await ok('main teammate reads the main TC Desk', getDoc(doc(t, 'transactions', 'main1')));
+await ok('member edits a deal', setDoc(doc(t, 'transactions', 'main2'), { f: { address: 'x' } }));
+await no('member cannot change templates', setDoc(doc(t, 'emailTemplates', 'e1'), { name: 'x' }));
+await no('member cannot change the team', setDoc(doc(t, 'members', 'm1'), { name: 'x' }));
+await no('member cannot make themselves admin', setDoc(doc(t, 'roles', T), { role: 'admin' }));
+await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'roles', T), { role: 'admin' }); });
+await ok('admin teammate changes templates', setDoc(doc(t, 'emailTemplates', 'e1'), { name: 'x' }));
 await no('main teammate cannot read alice workspace', getDoc(doc(t, 'ws/w1/transactions', 'd1')));
 await no('main teammate cannot read the ws record via the catch-all', getDoc(doc(t, 'ws', 'w1')));
 await no('main teammate cannot write wsmem via the catch-all', setDoc(doc(t, 'wsmem', B), { ws: 'w1', role: 'member' }));

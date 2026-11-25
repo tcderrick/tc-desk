@@ -303,7 +303,7 @@ async function sdDaily(cfg) {
   const dayDiff = (a, b) => Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / 864e5);
   const snap = await db.collection('sdq').where('pending', '>', 0).get();
   const due = x => {
-    const days = Array.isArray(x.days) && x.days.length ? x.days : [1, 2, 3, 4, 5]; const hour = +x.hour || 8;
+    const days = Array.isArray(x.days) && x.days.length ? x.days : [1, 2, 3, 4, 5]; const hour = +x.hour || 9;
     if (!x.auto || !days.includes(wdN) || now.hour < hour || now.hour >= hour + 3 || x.last === now.day) return false;
     if (x.last && dayDiff(now.day, x.last) < (+x.every || 1)) return false; return true;
   };
@@ -434,7 +434,7 @@ async function chatMail(m, ref) {
   let link = APP_URL + '/';
   try { link = await admin.auth().generateSignInWithEmailLink(m.email, { url: APP_URL + '/?le=' + encodeURIComponent(m.email) + '&chat=' + encodeURIComponent(m.txId), handleCodeInApp: true }); } catch (e) { console.warn('chat link', e.message); }
   const how = replyTo ? 'Just reply to this email to answer, or open the chat:' : 'Open the chat to reply:';
-  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:560px"><p>Hi ${escH(first)},</p><p>You have a new message about <b>${escH(addr)}</b> from ${escH(m.by || 'your TC team')}:</p><blockquote style="border-left:3px solid #d0d5dd;margin:0 0 14px;padding:4px 12px;color:#344054">${escH(m.text).replace(/\n/g, '<br>')}</blockquote><p>${how}</p><p><a href="${link}" style="display:inline-block;background:#101828;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none">Open chat</a></p><p style="color:#667085;font-size:12.5px">The button signs you in as ${escH(m.email)}. After the first time, this device stays signed in at app.derrick.club.</p></div>`;
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:560px"><p>Hi ${escH(first)},</p><p>You have a new message about <b>${escH(addr)}</b> from ${escH(m.by || 'your TC team')}:</p><blockquote style="border-left:3px solid #d0d5dd;margin:0 0 14px;padding:4px 12px;color:#344054">${escH(m.text).replace(/\n/g, '<br>')}</blockquote><p>${how}</p><p><a href="${link}" style="display:inline-block;background:#101828;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none">Open chat</a></p><p style="color:#667085;font-size:12.5px">The button signs you in as ${escH(m.email)}. After the first time, this device stays signed in at app.derrick.club. <b>This link is just for you, so please don't forward this email or share the link.</b></p></div>`;
   const text = `Hi ${first},\n\nYou have a new message about ${addr} from ${m.by || 'your TC team'}:\n\n${m.text}\n\n${replyTo ? 'Just reply to this email to answer, or open the chat:' : 'Open the chat to reply:'}\n${link}`;
   const from = 'TC Desk <' + addrOf(splitList(cfg.from)[0] || box) + '>';
   await sendOne({ from, to: m.email, subject: 'Message about ' + addr, html, text, replyTo, noCc: true }, '', cfg);

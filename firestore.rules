@@ -94,9 +94,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/ws/$(w)/portal/$(request.resource.data.pid)).data.data.show.chat == true;
     }
 
-    // Everything else: deals, contacts, templates, chat, settings. Your team only.
+    // Roles: Derrick, or a teammate marked Admin, can change templates, phases and the team. Members can't.
+    function isTAdmin() { return isAdmin() || (isTeam() && exists(/databases/$(database)/documents/roles/$(em())) && get(/databases/$(database)/documents/roles/$(em())).data.role == 'admin'); }
     match /{col}/{docId} {
-      allow read, write: if !(col in ['logins', 'ws', 'wsmem']) && isTeam();
+      allow read: if !(col in ['logins', 'ws', 'wsmem']) && isTeam();
+      allow write: if !(col in ['logins', 'ws', 'wsmem']) && isTeam()
+        && (!(col in ['emailTemplates', 'checklistTemplates', 'noteTemplates', 'phases', 'members', 'roles']) || isTAdmin());
     }
   }
 }
