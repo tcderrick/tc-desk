@@ -1,0 +1,127 @@
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+[36m[1mi  emulators:[22m[39m Starting emulators: firestore
+[36m[1mi  emulators:[22m[39m Detected demo project ID "demo-tcdesk", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+[33m[1m⚠ [22m[39m It appears you are running in a CI environment. You can avoid downloading the Firestore Emulator repeatedly by caching the /home/runner/.cache/firebase/emulators directory.
+[36m[1mi  firestore:[22m[39m downloading cloud-firestore-emulator-v1.22.0.jar...
+
+[36m[1mi  firestore:[22m[39m Firestore Emulator logging to [1mfirestore-debug.log[22m
+[32m[1m✔  firestore:[22m[39m Firestore Emulator was started in standard edition.
+[32m[1m✔  firestore:[22m[39m Firestore Emulator UI websocket is running on 9150.
+[36m[1mi [22m[39m Running script: [1mcd tests && node rules.test.mjs[22m
+PASS alice creates her workspace
+PASS carol creates her workspace
+[2026-11-25T07:45:52.474Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79f6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L58:24 for 'create' @ L58, false for 'create' @ L101, evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L101, evaluation error at L68:24 for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'update' @ L71, false for 'update' @ L101
+PASS alice cannot create a second workspace
+[2026-11-25T07:45:52.532Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79f8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L58:24 for 'create' @ L58, false for 'create' @ L101, evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L101, evaluation error at L68:24 for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L58, false for 'create' @ L101
+PASS teammate on the main team cannot create a workspace
+[2026-11-25T07:45:52.566Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79f9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L58, false for 'create' @ L101, false for 'update' @ L61, false for 'update' @ L101
+PASS xavier cannot create a workspace owned by someone else
+PASS alice writes a deal in her workspace
+PASS alice reads her deal
+PASS alice saves her own views
+PASS carol cannot read alice deals
+[2026-11-25T07:45:52.675Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79f7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L78:23 for 'create' @ L78, evaluation error at L78:23 for 'update' @ L78, false for 'create' @ L78
+PASS carol cannot write alice deals
+[2026-11-25T07:45:52.714Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79fd error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L68, false for 'create' @ L101
+PASS bob cannot add himself to alice workspace
+[2026-11-25T07:45:52.733Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79fe error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L68:24 for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L68, false for 'create' @ L101
+PASS bob cannot make himself owner of alice workspace
+PASS alice cannot read the main TC Desk
+[2026-11-25T07:45:52.757Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da79fa error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L101:23 for 'create' @ L101, evaluation error at L101:23 for 'update' @ L101, false for 'create' @ L101
+PASS alice cannot write the main TC Desk
+PASS main teammate reads the main TC Desk
+PASS member edits a deal
+[2026-11-25T07:45:52.810Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a00 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L101:23 for 'create' @ L101, evaluation error at L101:23 for 'update' @ L101, false for 'create' @ L101
+PASS member cannot change templates
+[2026-11-25T07:45:52.831Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a01 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L101:23 for 'create' @ L101, evaluation error at L101:23 for 'update' @ L101, false for 'create' @ L101
+PASS member cannot change the team
+[2026-11-25T07:45:52.852Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a02 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L101:23 for 'create' @ L101, evaluation error at L101:23 for 'update' @ L101, false for 'create' @ L101
+PASS member cannot make themselves admin
+PASS admin teammate changes templates
+PASS main teammate cannot read alice workspace
+PASS main teammate cannot read the ws record via the catch-all
+[2026-11-25T07:45:52.948Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a04 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L68, false for 'create' @ L101
+PASS main teammate cannot write wsmem via the catch-all
+[2026-11-25T07:45:52.965Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a05 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L68, false for 'create' @ L101
+PASS alice cannot invite as a full member directly
+PASS alice invites bob
+PASS invited bob cannot read deals yet
+PASS bob reads his invite
+[2026-11-25T07:45:53.020Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a06 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'update' @ L71, false for 'update' @ L101
+PASS alice cannot promote bob herself
+PASS bob accepts the invite
+PASS bob reads alice deals now
+PASS bob edits a deal
+[2026-11-25T07:45:53.069Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a08 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L68:24 for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'create' @ L68, false for 'create' @ L101
+PASS bob (member) cannot invite others
+[2026-11-25T07:45:53.083Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a09 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'update' @ L71, false for 'update' @ L101
+PASS bob cannot move himself to carol workspace
+[2026-11-25T07:45:53.098Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a0a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L68:24 for 'create' @ L68, false for 'create' @ L101, evaluation error at L71:24 for 'update' @ L71, false for 'update' @ L101, false for 'update' @ L71, false for 'update' @ L101
+PASS alice cannot steal carol from her workspace
+[2026-11-25T07:45:53.112Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a0b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L73:24 for 'delete' @ L73, false for 'delete' @ L101, false for 'delete' @ L73, false for 'delete' @ L101
+PASS alice cannot delete carol membership
+PASS alice lists her team
+PASS carol cannot list alice team
+[2026-11-25T07:45:53.225Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a0c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:24 for 'delete' @ L63, false for 'delete' @ L101, false for 'delete' @ L63, false for 'delete' @ L101
+PASS carol cannot close alice workspace
+[2026-11-25T07:45:53.239Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a0d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L101, false for 'update' @ L61, false for 'update' @ L101
+PASS alice cannot hand ownership to carol
+[2026-11-25T07:45:53.281Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a0e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L58:24 for 'create' @ L58, false for 'create' @ L101, evaluation error at L61:24 for 'update' @ L61, false for 'update' @ L101, false for 'update' @ L61, false for 'update' @ L101
+PASS member cannot rewrite the workspace record
+PASS alice renames her workspace
+PASS alice shares a file with dave
+PASS alice shares a no-chat file with dave
+PASS dave finds his files across workspaces
+PASS dave cannot list everyone portal files
+PASS carol cannot read dave portal file
+PASS dave chats on his file
+[2026-11-25T07:45:53.392Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a11 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L78:23 for 'create' @ L78, evaluation error at L88:24 for 'create' @ L88, evaluation error at L78:23 for 'update' @ L78, Null value error. for 'create' @ L78, false for 'create' @ L88
+PASS dave cannot chat where chat is off
+[2026-11-25T07:45:53.407Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a12 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L78:23 for 'create' @ L78, false for 'create' @ L88, evaluation error at L78:23 for 'update' @ L78, Null value error. for 'create' @ L78, false for 'create' @ L88
+PASS dave cannot add extra fields to a chat message
+[2026-11-25T07:45:53.420Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a13 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L78:23 for 'create' @ L78, false for 'create' @ L88, evaluation error at L78:23 for 'update' @ L78, Null value error. for 'create' @ L78, false for 'create' @ L88
+PASS dave cannot pose as the team
+PASS dave reads his chat
+PASS dave cannot read deals
+PASS alice reads dave chat in her workspace
+PASS bob leaves the team
+[2026-11-25T07:45:53.471Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x72da7a14 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:24 for 'delete' @ L63, false for 'delete' @ L101, false for 'delete' @ L63, false for 'delete' @ L101
+PASS bob cannot close alice workspace
+PASS carol closes her own workspace
+PASS carol can no longer read her old workspace
+PASS bob cannot read deals after leaving
+
+58 passed, 0 failed
+[32m[1m✔ [22m[39m Script exited successfully (code 0)
+[36m[1mi  emulators:[22m[39m Shutting down emulators.
+[36m[1mi  firestore:[22m[39m Stopping Firestore Emulator
+[36m[1mi  hub:[22m[39m Stopping emulator hub
+[36m[1mi  logging:[22m[39m Stopping Logging Emulator
+EXIT 0
