@@ -285,11 +285,43 @@ exports.tick = onSchedule({ schedule: 'every 1 minutes', memory: '512MiB', timeo
   try { const info = await (await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + await saToken())).json(); p.clientId = info.azp || info.aud || ''; } catch (e) {}
   try { await mailToken(box); p.ok = true; p.sendOk = true; p.err = ''; } catch (e) { p.ok = false; p.sendOk = false; p.err = e.message; await status(p); return; }
   try { await sendDue(cfg); p.outErr = ''; } catch (e) { p.outErr = e.message; }
+  try { await sdDaily(cfg); p.sdErr = ''; } catch (e) { p.sdErr = e.message; }
   try { await watchRenew(cfg); p.watchOk = true; p.watchErr = ''; } catch (e) { p.watchOk = false; p.watchErr = e.message; }
   try { await withLock(() => mailCheck(cfg)); p.mailOk = true; p.mailErr = ''; } catch (e) { p.mailOk = false; p.mailErr = e.message; }
   await status(p);
 });
 
+
+/* ---------- Sent docs: weekday 8 AM reminders to the other side, until every document is signed ----------
+   The app keeps sdq/<deal> ready to send (recipients, message, file list). "Send reminder now" sets force. */
+function ptParts(d = new Date()) {
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short' }).formatToParts(d);
+  const g = k => (s.find(x => x.type === k) || {}).value; return { day: `${g('year')}-${g('month')}-${g('day')}`, hour: +g('hour') % 24, wd: g('weekday') };
+}
+async function sdDaily(cfg) {
+  const now = ptParts(); const morning = !['Sat', 'Sun'].includes(now.wd) && now.hour >= 8 && now.hour < 11;
+  const snap = await db.collection('sdq').where('pending', '>', 0).get();
+  for (const d of snap.docs) {
+    const q0 = dec(d.data());
+    if (!q0.force && !(morning && q0.auto && q0.last !== now.day)) continue;
+    const q = await db.runTransaction(async tr => {
+      const s = await tr.get(d.ref); if (!s.exists) return null; const x = dec(s.data());
+      if (!(x.pending > 0) || !(x.force || (morning && x.auto && x.last !== now.day))) return null;
+      tr.update(d.ref, { last: now.day, lastAt: Date.now(), force: false, err: '' }); return x;
+    });
+    if (!q) continue;
+    try {
+      const files = []; let total = 0;
+      for (const f of (q.files || [])) {
+        let data = ''; for (let c = 0; c < (f.n || 0); c++) { const x = await db.doc(`sdatt/${f.key}_${c}`).get(); if (x.exists) data += dec(x.data()).d || ''; }
+        if (!data) continue; total += data.length * 0.75; if (total > 20 * 1024 * 1024) break;
+        files.push({ name: f.name, type: f.type, data });
+      }
+      if (!splitList(q.to).length) throw new Error('No one to send it to');
+      await sendOne({ to: q.to, cc: q.cc || '', subject: q.subject, html: q.html, text: q.text, files }, '', cfg);
+    } catch (e) { console.error('sent docs', d.id, e.message); await d.ref.update({ err: e.message, last: q.last || '' }).catch(() => {}); }
+  }
+}
 
 /* ---------- @mentions in a file email's team chat ---------- */
 exports.fmMention = onDocumentWritten({ document: 'fmail/{id}', memory: '256MiB' }, async ev => {
