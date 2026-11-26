@@ -1,0 +1,98 @@
+== Turning on the Google services the server uses
+   ok
+== Server account
+   ok
+==   role roles/datastore.user
+   ok
+==   role roles/firebasecloudmessaging.admin
+   ok
+==   role roles/logging.logWriter
+   ok
+==   role roles/eventarc.eventReceiver
+   ok
+==   role roles/run.invoker
+   ok
+==   role roles/pubsub.subscriber
+   ok
+== Build permissions (needed on newer Google Cloud projects)
+   ok
+   ok
+   ok
+   ok
+   ok
+   ok
+   ok
+   ok
+   ok
+   ok
+== Mail alert channel (Gmail tells TC Desk about new mail here)
+   ok
+== Done
+   deploy account has: roles/firebase.admin
+   deploy account has: roles/owner
+   deploy account has: roles/serviceusage.serviceUsageConsumer
+== Sign-in links from the team address
+   ok
+
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+
+added 252 packages in 2s
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+[1m[37m===[39m Deploying to 'tc-desk'...[22m
+
+[36m[1mi [22m[39m deploying [1mfunctions[22m
+[36m[1mi  functions:[22m[39m preparing codebase [1mdefault[22m for deployment
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudfunctions.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
+[36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
+[32m[1m✔  functions:[22m[39m required API [1mcloudfunctions.googleapis.com[22m is enabled
+[32m[1m✔  artifactregistry:[22m[39m required API [1martifactregistry.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mcloudbuild.googleapis.com[22m is enabled
+[33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mpackage.json indicates an outdated version of firebase-functions. Please upgrade using [1mnpm install --save firebase-functions@latest[22m in your functions directory.
+[33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mPlease note that there will be breaking changes when you upgrade.
+[36m[1mi [22m[39m [36m[1mfunctions: [22m[39mLoaded environment variables from functions/.env
+[36m[1mi  functions:[22m[39m Loading and analyzing source code for codebase default to determine what to deploy
+Serving at port 8540
+
+[36m[1mi  extensions:[22m[39m ensuring required API [1mfirebaseextensions.googleapis.com[22m is enabled...
+[32m[1m✔  extensions:[22m[39m required API [1mfirebaseextensions.googleapis.com[22m is enabled
+[36m[1mi [22m[39m [36m[1mfunctions: [22m[39mLoaded environment variables from functions/.env
+[36m[1mi  functions:[22m[39m preparing [1mfunctions[22m directory for uploading...
+[36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1m/home/runner/work/tc-desk/tc-desk/functions[22m (44.87 KB) for uploading
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudscheduler.googleapis.com[22m is enabled...
+[32m[1m✔  functions:[22m[39m required API [1mcloudscheduler.googleapis.com[22m is enabled
+[36m[1mi  functions:[22m[39m ensuring required API [1mrun.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1meventarc.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mpubsub.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mstorage.googleapis.com[22m is enabled...
+[32m[1m✔  functions:[22m[39m required API [1meventarc.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mstorage.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mrun.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mpubsub.googleapis.com[22m is enabled
+[36m[1mi  functions:[22m[39m generating the service identity for [1mpubsub.googleapis.com[22m...
+[36m[1mi  functions:[22m[39m generating the service identity for [1meventarc.googleapis.com[22m...
+[32m[1m✔  functions:[22m[39m [1mfunctions[22m source uploaded successfully
+[36m[1mi  functions:[22m[39m creating Node.js 22 (2nd Gen) function [1mportalFirst(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mfmMention(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mpchatIn(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mlinkSend(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1moutSend(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mmailIn(us-west2)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mtick(us-west2)[22m...
+[32m[1m✔ [22m[39m [1m[32mfunctions[fmMention(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[pchatIn(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[linkSend(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[mailIn(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[tick(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[outSend(us-west2)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[portalFirst(us-west2)][39m[22m Successful create operation.
+
+[32m[1m✔ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/tc-desk/overview
+DEPLOY OK
+run 45885763313 success Thu Nov 26 19:45:57 UTC 2026
