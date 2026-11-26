@@ -375,6 +375,27 @@ exports.pchatIn = onDocumentCreated({ document: 'pchat/{id}', memory: '256MiB' }
   res.responses.forEach((r, i) => { const c = r.error && r.error.code; if (c && /registration-token-not-registered|invalid-registration-token/.test(c)) docs[i].ref.delete().catch(() => {}); });
 });
 
+/* ---------- first portal sign-in by an agent: email the TC ---------- */
+// portalseen/{email} is written each time someone opens their portal; it's created only on the very first visit.
+exports.portalFirst = onDocumentCreated({ document: 'portalseen/{email}', memory: '256MiB' }, async ev => {
+  const email = String(ev.params.email || '').toLowerCase();
+  try {
+    const sn = await db.collection('portal').where('email', '==', email).get();
+    const rows = sn.docs.map(d => dec(d.data())).filter(p => p.group === 'rep' || p.group === 'oth');
+    if (!rows.length) return;
+    const cfg = await setting('sending'); const box = mailboxOf(cfg); if (!box) return;
+    const name = rows[0].name || email;
+    const deals = [];
+    for (const p of rows) { const tx = await txFor(p.txId); const f = (tx && tx.f) || {}; deals.push({ id: p.txId, addr: f.address || 'a file', side: p.group === 'rep' ? 'our agent' : 'other side agent' }); }
+    const list = deals.map(d => `<li><a href="${APP_URL}/#v=detail&tx=${encodeURIComponent(d.id)}">${escH(d.addr)}</a> <span style="color:#667085">(${d.side})</span></li>`).join('');
+    const when = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
+    const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#101828;max-width:560px"><p><b>${escH(name)}</b> (${escH(email)}) just signed in to their portal for the first time, ${escH(when)}.</p><p>Files they can see:</p><ul>${list}</ul><p style="color:#667085;font-size:12.5px">You only get this email the first time each agent signs in.</p></div>`;
+    const text = `${name} (${email}) just signed in to their portal for the first time, ${when}.\n\nFiles they can see:\n` + deals.map(d => `- ${d.addr} (${d.side})`).join('\n');
+    const from = 'TC Desk <' + addrOf(splitList(cfg.from)[0] || box) + '>';
+    await sendOne({ from, to: box, subject: `${name} signed in to the portal`, html, text, noCc: true }, '', cfg);
+  } catch (e) { console.error('portalFirst', e.message); }
+});
+
 /* ---------- sign-in links sent from the team address ---------- */
 const LINK_ORIGINS = ['https://app.derrick.club', 'https://tc-desk.web.app', 'https://tc-desk.firebaseapp.com'];
 exports.linkSend = onDocumentCreated({ document: 'linkreq/{id}', memory: '256MiB' }, async ev => {
